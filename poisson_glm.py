@@ -42,18 +42,25 @@ def _mu(eta):
 
 
 def _smooth_f(w, b, X, y, l2):
-    """Smooth part of the objective: Poisson NLL + ridge term (no L1)."""
+    """Smooth part of the objective: mean Poisson NLL + ridge term (no L1).
+
+    The NLL is averaged over timepoints (1/T), the sklearn/glmnet convention, so that
+    `alpha` lives on an O(1) scale independent of session length T -- this is what makes
+    the elastic-net penalty comparable across sessions and matchable to glmTF28.
+    """
     eta = X @ w + b
     mu = _mu(eta)
-    return jnp.sum(mu - y * eta) + 0.5 * l2 * jnp.sum(w * w)
+    T = y.shape[0]
+    return jnp.sum(mu - y * eta) / T + 0.5 * l2 * jnp.sum(w * w)
 
 
 def _smooth_grad(w, b, X, y, l2):
     eta = X @ w + b
     mu = _mu(eta)
     r = mu - y
-    gw = X.T @ r + l2 * w
-    gb = jnp.sum(r)
+    T = y.shape[0]
+    gw = (X.T @ r) / T + l2 * w
+    gb = jnp.sum(r) / T
     return gw, gb
 
 
