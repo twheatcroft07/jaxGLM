@@ -185,6 +185,20 @@ def fit_units_grid(X, Y, alphas, l1_ratio, L0=1.0, max_iter=500, tol=1e-7, famil
     return _fit_units_grid(X, Y, alphas, l1_ratio, L0, max_iter, tol, family)
 
 
+# Per-unit alpha: each unit fit at its OWN regularization (e.g. CV-selected lambda).
+_fit_units_alpha = jax.jit(
+    jax.vmap(fit_one, in_axes=(None, 1, 0, None, None, None, None, None),
+             out_axes=(1, 0, 0, 0)),
+    static_argnums=(5, 7),
+)
+
+
+def fit_units_alpha(X, Y, alphas_per_unit, l1_ratio, L0=1.0, max_iter=500, tol=1e-7,
+                    family="poisson"):
+    """Fit every unit with its own alpha. alphas_per_unit: (U,) -> W (P, U), b (U,), ..."""
+    return _fit_units_alpha(X, Y, alphas_per_unit, l1_ratio, L0, max_iter, tol, family)
+
+
 # --------------------------------------------------------------------- deviance / D^2 / pred
 def predict_rate(X, W, b, family="poisson"):
     """Predicted mean mu for X:(T,P), W:(P,U), b:(U,) -> (T, U)."""

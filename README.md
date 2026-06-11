@@ -118,8 +118,8 @@ arguments are positional. [`test_synthetic.py`](test_synthetic.py) is a worked e
 - [x] Core FISTA elastic-net Poisson solver, vmapped over units / λ-grid
 - [x] Deviance / D² helpers, standardization
 - [ ] Session data loader (design matrix `X`, response counts `Y`, subset column-masks)
-- [ ] Per-unit cross-validated λ selection
-- [ ] Predictor-subset leave-out → ΔD² (predictor importance)
+- [x] Per-unit cross-validated λ selection (`encoding.cv_select_alpha`)
+- [x] Predictor-subset leave-out → ΔD² (`encoding.predictor_importance`, held-out)
 - [ ] Significance testing (intercept-null Wilcoxon; permutation/shuffle null)
 - [x] IBL Level-A comparison harness (jaxGLM reproduces sklearn/neurencoding on real BWM data)
 - [x] Gaussian/linear family (continuous signals, e.g. photometry)
