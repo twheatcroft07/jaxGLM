@@ -229,6 +229,38 @@ def frac_deviance_explained(y, mu, mu_null, family="poisson", eps=1e-10):
     return 1.0 - dev_m / jnp.clip(dev_0, eps, None), dev_m, dev_0
 
 
+# ----------------------------------------------------------------- objective decomposition
+def objective_terms(X, Y, W, b, alpha, l1_ratio, family="poisson"):
+    """Decompose the fit into reconstruction vs penalty, per unit -- the 'right scale?' diagnostic.
+
+    Two reconstruction measures are returned because they serve different purposes:
+      `nll`   -- the data term the solver actually minimizes, (1/T) Σ loss(eta,y). For Poisson this
+                 drops the log(y!) constant, so it is NOT >= 0 and only `nll + penalty == total`
+                 (the solver objective) is meaningful. Use it to verify the objective.
+      `recon` -- deviance/(2T) >= 0, a proper reconstruction error on the SAME objective scale
+                 (since NLL = NLL_saturated + deviance/2). Use THIS for the penalty-vs-reconstruction
+                 ratio. `penalty_frac = penalty/(penalty + recon)` is then well-defined in [0,1]:
+                 ~0 ⇒ barely regularized, →1 ⇒ over-regularized.
+
+    The penalty *term* is non-monotonic in alpha (zero at alpha→0 and at alpha_max where w=0), so
+    read it across an alpha grid -- see encoding.regularization_path.
+
+    X (T,P), Y (T,U), W (P,U), b (U,). Returns dict of (U,) arrays:
+    nll, recon, l1, l2, penalty, total (= nll+penalty), penalty_frac.
+    """
+    X = jnp.asarray(X); Y = jnp.asarray(Y); W = jnp.asarray(W); b = jnp.asarray(b)
+    T = Y.shape[0]
+    mu_fn, loss_fn, _ = _family_funcs(family)
+    eta = X @ W + b[None, :]
+    nll = jax.vmap(lambda e, y: loss_fn(e, y), in_axes=(1, 1))(eta, Y) / T
+    recon = deviance(Y, mu_fn(eta), family) / (2.0 * T)          # >= 0 reconstruction (obj scale)
+    l1 = alpha * l1_ratio * jnp.sum(jnp.abs(W), axis=0)
+    l2 = 0.5 * alpha * (1.0 - l1_ratio) * jnp.sum(W * W, axis=0)
+    penalty = l1 + l2
+    return dict(nll=nll, recon=recon, l1=l1, l2=l2, penalty=penalty, total=nll + penalty,
+                penalty_frac=penalty / jnp.where(penalty + recon == 0, 1.0, penalty + recon))
+
+
 # ---------------------------------------------------------------------------- standardize
 def standardize(X, eps=1e-8):
     """Return (Xz, mean, std). Constant columns get std=1 (left unscaled)."""

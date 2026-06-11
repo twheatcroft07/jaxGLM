@@ -47,6 +47,29 @@ def plot_kernels(W, names, bin_width=None, mean_sem=False, axes=None, figsize=No
     return fig
 
 
+def plot_regularization_path(path, ax=None):
+    """The 'are we in the right scale?' figure from encoding.regularization_path(...). Plots the
+    reconstruction (data) term and the penalty term vs alpha (left axis) and the CV deviance
+    (right axis), with the CV-optimal alpha marked. A healthy scale: CV minimum sits where the
+    data term has only mildly risen and the penalty is meaningfully active (not ~0, not dominant)."""
+    import matplotlib.pyplot as plt
+    a = np.asarray(path["alphas"])
+    if ax is None:
+        _, ax = plt.subplots(figsize=(5.2, 3.3))
+    ax.plot(a, path["recon"], "C0-o", ms=3, label="reconstruction (½ mean deviance)")
+    ax.plot(a, path["penalty"], "C1-o", ms=3, label="penalty")
+    ax.set_xscale("log"); ax.set_xlabel("alpha"); ax.set_ylabel("objective term (mean / unit)")
+    ax.axvline(path["alpha_cvmin"], color="k", lw=0.8, ls=":", label="CV-optimal α")
+    ax2 = ax.twinx()
+    ax2.plot(a, path["cv_dev"], "C3--", lw=1, label="CV deviance")
+    ax2.set_ylabel("CV deviance", color="C3"); ax2.tick_params(axis="y", colors="C3")
+    h1, l1 = ax.get_legend_handles_labels()
+    h2, l2 = ax2.get_legend_handles_labels()
+    ax.legend(h1 + h2, l1 + l2, fontsize=7, loc="upper center")
+    ax.figure.tight_layout()
+    return ax.figure
+
+
 def plot_reconstruction(Y, mu, unit=0, window=None, bin_width=None, ax=None):
     """Predicted (mu) vs actual (Y) signal for one unit over a window. Y, mu: (T, U)."""
     import matplotlib.pyplot as plt

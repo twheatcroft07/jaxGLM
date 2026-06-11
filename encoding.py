@@ -89,6 +89,27 @@ def cv_select_alpha(X, Y, alphas, l1_ratio=0.5, fold_ids=None, n_folds=5, family
     return alpha_star, cv_dev
 
 
+def regularization_path(X, Y, alphas, l1_ratio=0.5, fold_ids=None, n_folds=5, family="poisson",
+                        L0=1.0, max_iter=2000, tol=1e-8):
+    """For each alpha: full-data fit -> mean data term & mean penalty term (across units), plus
+    the mean held-out CV deviance. Returns dict {alphas, data, penalty, cv_dev (each (A,)),
+    alpha_cvmin} -- the 'are we in the right scale?' diagnostic. Plot with
+    viz.plot_regularization_path: data term rises, penalty bumps, CV deviance dips at the sweet
+    spot. Standardize X first."""
+    X = jnp.asarray(X); Y = jnp.asarray(Y)
+    alphas = np.asarray(alphas)
+    _, cv_dev_AU = cv_select_alpha(X, Y, alphas, l1_ratio, fold_ids, n_folds, family, L0, max_iter, tol)
+    cv_dev = cv_dev_AU.mean(1)                                       # mean over units
+    Wg, bg, _, _ = pg.fit_units_grid(X, Y, jnp.asarray(alphas), l1_ratio, L0, max_iter, tol, family)
+    recon = np.zeros(len(alphas)); penalty = np.zeros(len(alphas))
+    for a in range(len(alphas)):
+        ot = pg.objective_terms(X, Y, Wg[a], bg[a], float(alphas[a]), l1_ratio, family)
+        recon[a] = float(np.asarray(ot["recon"]).mean())            # deviance/(2T), >= 0
+        penalty[a] = float(np.asarray(ot["penalty"]).mean())
+    return dict(alphas=alphas, recon=recon, penalty=penalty, cv_dev=cv_dev,
+                alpha_cvmin=float(alphas[int(np.argmin(cv_dev))]))
+
+
 def predictor_importance(X, Y, subsets, alphas, l1_ratio=0.5, fold_ids=None, n_folds=5,
                          family="poisson", L0=1.0, max_iter=2000, tol=1e-8):
     """Held-out D^2 of the full model and delta-D^2 for removing each predictor group.
