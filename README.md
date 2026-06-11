@@ -16,9 +16,9 @@ a session at once** on a single GPU. Supports **Poisson** (spike counts) and **G
 | module | what it does |
 |---|---|
 | [`design.py`](design.py) | **Bin** raw spike/event/signal times onto a grid (`bin_spikes`, `events_from_times`, `resample_continuous`), build a **shift-kernel design matrix** `X` (`build_design`), and parse fitted weights back into per-predictor kernels (`kernels_from_weights`). |
-| [`poisson_glm.py`](poisson_glm.py) | The **GPU solver**: batched elastic-net GLM fit over all units (FISTA), `family="poisson"`/`"gaussian"`, plus deviance / D² / R² helpers. |
-| [`encoding.py`](encoding.py) | The **encoding model**: per-unit cross-validated λ (`cv_select_alpha`), held-out predictor-subset **ΔD²** (`predictor_importance`), and **significance** (`wilcoxon_full_vs_null`, `permutation_null_d2`). |
-| [`viz.py`](viz.py) | **Plots**: per-predictor kernels vs lag, predicted-vs-actual reconstruction, event-aligned averages. |
+| [`poisson_glm.py`](poisson_glm.py) | The **GPU solver**: batched elastic-net GLM fit over all units (FISTA), `family="poisson"`/`"gaussian"`, deviance / D² / R², and the objective decomposition (`objective_terms`). |
+| [`encoding.py`](encoding.py) | The **encoding model**: data-driven `alpha_grid`, per-unit CV λ (`cv_select_alpha`), held-out subset **ΔD²** (`predictor_importance`), **significance** (`wilcoxon_full_vs_null`, `permutation_null_d2`), and the **regularization path** (`regularization_path`). |
+| [`viz.py`](viz.py) | **Plots**: kernels vs lag, predicted-vs-actual reconstruction, event-aligned averages, and the regularization-scale figure (`plot_regularization_path`). |
 
 A typical end-to-end run:
 
@@ -140,6 +140,17 @@ down to `alpha_max·1e-3`, so the sweep is guaranteed to bracket the useful rang
 Standardize `X` first (above) or the grid is meaningless. If many units land on the smallest grid
 value, widen with `ratio=1e-4`. (Ridge has no finite `alpha_max`; `alpha_grid` uses a small
 surrogate `l1_ratio` to set the scale.)
+
+**Sanity-check the scale.** To check you're in a sensible regime, decompose the objective into the
+**reconstruction term** (`deviance/2T`, ≥0) and the **penalty term**: `poisson_glm.objective_terms`
+returns per-unit `recon`, `penalty`, and `penalty_frac = penalty/(penalty+recon)` ∈ [0,1] (~0 ⇒
+barely regularized, →1 ⇒ over). Better, view the whole sweep — `encoding.regularization_path(...)`
++ `viz.plot_regularization_path(...)` plot reconstruction ↑, the (non-monotonic) penalty bump, and
+CV deviance across the grid with the CV-optimal `alpha` marked. (Use the deviance-based `recon`,
+not the raw Poisson `nll` — the latter drops `log(y!)` and can go negative, so its ratio is
+unbounded.)
+
+![regularization path](docs/figures/regpath_poisson.png)
 
 **CV folds — avoid temporal leakage.** `n_folds` / `fold_ids` control the splits. Bins within a
 trial are correlated, so random per-bin folds leak signal across train/test and inflate D². Pass
