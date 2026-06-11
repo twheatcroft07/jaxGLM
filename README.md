@@ -107,11 +107,15 @@ arguments are positional. [`test_synthetic.py`](test_synthetic.py) is a worked e
 - **Synthetic** ([`test_synthetic.py`](test_synthetic.py)): recovers known weights (corr ≈ 0.999),
   matches an independent Newton/IRLS solve in the ridge case to ~1e-10, L1 induces sparsity, and
   the batched grid fit matches a looped fit. ✅ passing.
-- **Against a published reference (in progress):** a "Level A" comparison vs the International
-  Brain Laboratory's `neurencoding` (scikit-learn `PoissonRegressor`) on public brain-wide-map
-  spike data. Both fit the **identical** design matrix, so the comparison isolates the solver
-  from design-matrix/basis-function choices — if jaxGLM doesn't reproduce their per-unit fits,
-  it's a bug in jaxGLM.
+- **Against published references on real data (both families pass).** Each fits an *identical*
+  design matrix with jaxGLM and with the standard scikit-learn fitter the relevant lab tool
+  wraps, isolating the solver from design-matrix choices:
+  - **Poisson / spikes** — IBL brain-wide-map Neuropixels data vs `PoissonRegressor`
+    (≈ IBL `neurencoding`): per-unit D² correlation **1.0000**, weight correlation **0.9988**
+    ([`ibl/`](ibl)).
+  - **Gaussian / photometry** — Chantranupong 2023 dopamine/ACh data (DANDI 001767) vs
+    `ElasticNet` (≈ Sabatini-lab `sglm`): R² agree to **7e-4**, weight correlation **0.9963**
+    ([`chantranupong/`](chantranupong)).
 
 ## Roadmap
 
