@@ -101,16 +101,58 @@ into dense GPU matmuls — what CPU tools (sklearn one neuron at a time) cannot 
   `permutation_null_d2` (circular-shift null) give per-unit p-values.
 - **Kernels & figures**: `viz.plot_kernels` etc. turn the fitted weights into kernel plots.
 
-### The knobs
+### Inputs and the choices that matter
 
-| Parameter   | Meaning |
-|-------------|---------|
-| `family`    | `"poisson"` (counts) or `"gaussian"` (continuous). |
-| `alpha`     | Regularization strength (larger ⇒ more shrinkage). |
-| `l1_ratio`  | `0.0` = ridge, `1.0` = lasso, in between = elastic net. |
-| `max_iter` / `tol` | FISTA iteration cap / stopping tolerance. |
+Beyond `X` and `Y`, a handful of choices drive the results. What you provide, and how to pick it:
 
-`fit_units` and `fit_units_grid` are the batched entry points; both take a `family` kwarg.
+**Bin size / sampling (`dt`).** `X` and `Y` must be on the *same* time grid; the bin width sets
+temporal resolution. Finer bins → sharper kernels but more bins (more compute) and sparser counts
+(Poisson). Photometry: use the native rate (e.g. 18.5 Hz). Spikes: 10–50 ms bins are typical.
+`dt` is also what `viz.plot_kernels(..., dt=…)` uses to label lags in seconds. Binning `Y` onto
+this grid is on you.
+
+**Predictors and the kernel window (`shifts`).** `design.build_design(predictors, shifts)`
+expands each event into time-shifted copies. `shifts` is the lag window — e.g. `range(-10, 30)`
+at 20 ms = −0.2 to +0.6 s around the event. Cover the response you expect (negative lags for
+anticipatory, positive for evoked). Pass a `{name: range}` dict for **per-predictor windows**
+(e.g. a long reward kernel, short lick kernel). Predictors can be event indicators (0/1, via
+`events_from_indices`) or continuous regressors.
+
+**Standardize `X`.** `pg.standardize(X)` z-scores columns so `alpha` acts evenly across
+predictors; recover interpretable weights with `unstandardize_weights`. Recommended (the
+reproductions do this).
+
+**Regularization (`alpha`, `l1_ratio`) — select it, don't guess.** `l1_ratio` sets the penalty
+type (`0`=ridge, `1`=lasso, between=elastic net); `alpha` sets the strength. Don't hand-pick
+`alpha` — cross-validate it: `encoding.cv_select_alpha(X, Y, alphas, …)` returns a **per-unit**
+`alpha`, or `fit_units_grid` sweeps the grid. Provide `alphas` spanning a few orders of magnitude
+(e.g. `[1e-4, 1e-3, 1e-2, 1e-1, 1]`).
+
+**CV folds — avoid temporal leakage.** `n_folds` / `fold_ids` control the splits. Bins within a
+trial are correlated, so random per-bin folds leak signal across train/test and inflate D². Pass
+`fold_ids` grouping **whole trials** (one id per trial or block) so held-out data is genuinely
+independent — this matters for honest D² *and* significance. Contiguous-block folds (the default)
+are a reasonable fallback.
+
+**Predictor subsets (`subsets`).** For ΔD² you define the groups to ablate as
+`{name: column_indices}`. The `names` returned by `build_design` make it easy to grab all shifts
+of a predictor (e.g. every `reward_*` column).
+
+**Permutations (`n_perm`).** `permutation_null_d2` resolves p to `1/(n_perm+1)`; use ≥200 for
+p≈0.005, more for stricter thresholds. Each permutation refits, so it's the main cost driver.
+
+**Response (`Y`) must match the family.** Poisson: nonnegative integer counts per bin. Gaussian:
+any continuous value (e.g. z-scored dF/F).
+
+| param | where | quick guidance |
+|---|---|---|
+| `family` | `fit_units`, `encoding` | `"poisson"` counts · `"gaussian"` continuous |
+| `shifts` | `build_design` | lag window per predictor; cover expected response |
+| `alpha` | `fit_units` / `alphas` grid | **CV-select**, don't hardcode |
+| `l1_ratio` | `fit_units` | `0` ridge · `1` lasso · between elastic net |
+| `fold_ids` | `encoding.*` | group **whole trials** to avoid leakage |
+| `n_perm` | `permutation_null_d2` | ≥200; trades runtime for p-resolution |
+| `max_iter`/`tol` | `fit_units` | FISTA iteration cap / stopping tolerance |
 
 ## Validation
 
