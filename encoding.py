@@ -14,6 +14,7 @@ the full model) and then reused for the full and ablated fits -- a controlled ab
 """
 import numpy as np
 import jax.numpy as jnp
+from scipy.stats import wilcoxon
 
 import poisson_glm as pg
 
@@ -92,3 +93,67 @@ def predictor_importance(X, Y, subsets, alphas, l1_ratio=0.5, fold_ids=None, n_f
         delta_d2[name] = d2_full - d2s                       # contribution of the group
     return dict(alpha_star=alpha_star, d2_full=d2_full, delta_d2=delta_d2,
                 d2_subset=d2_subset, cv_dev=cv_dev)
+
+
+def _per_fold_deviance(X, Y, alpha_per_unit, l1_ratio, folds, family, kw):
+    """Per-fold (not summed) held-out model and null deviance: each (n_folds, U)."""
+    T, U = Y.shape
+    allidx = np.arange(T)
+    dev = np.zeros((len(folds), U)); devnull = np.zeros((len(folds), U))
+    for i, te in enumerate(folds):
+        tr = np.setdiff1d(allidx, te)
+        W, b, _, _ = pg.fit_units_alpha(X[tr], Y[tr], jnp.asarray(alpha_per_unit), l1_ratio,
+                                        kw["L0"], kw["max_iter"], kw["tol"], family)
+        mu = pg.predict_rate(X[te], W, b, family)
+        dev[i] = np.asarray(pg.deviance(Y[te], mu, family))
+        mu0 = jnp.broadcast_to(Y[tr].mean(0)[None, :], Y[te].shape)
+        devnull[i] = np.asarray(pg.deviance(Y[te], mu0, family))
+    return dev, devnull
+
+
+def wilcoxon_full_vs_null(X, Y, alphas, l1_ratio=0.5, fold_ids=None, n_folds=10, family="poisson",
+                          L0=1.0, max_iter=2000, tol=1e-8):
+    """Per-unit Wilcoxon signed-rank test that the full model beats the intercept-only null,
+    paired across CV folds on held-out deviance (the refactoredHarveyGLM test). One-sided.
+    Note: min achievable p ~ 2^-n_folds, so use enough folds (default 10). Returns dict with
+    stat, pvalue, significant (U,)."""
+    X = jnp.asarray(X); Y = jnp.asarray(Y); U = Y.shape[1]
+    kw = dict(L0=L0, max_iter=max_iter, tol=tol)
+    folds = make_folds(Y.shape[0], n_folds, fold_ids)
+    alpha_star, _ = cv_select_alpha(X, Y, alphas, l1_ratio, fold_ids, n_folds, family, L0, max_iter, tol)
+    dev, devnull = _per_fold_deviance(X, Y, alpha_star, l1_ratio, folds, family, kw)
+    diff = devnull - dev                                     # > 0 => full model better per fold
+    stat = np.full(U, np.nan); pval = np.ones(U)
+    for u in range(U):
+        d = diff[:, u]
+        if np.allclose(d, 0):
+            continue
+        try:
+            stat[u], pval[u] = wilcoxon(d, alternative="greater")
+        except ValueError:
+            pass
+    return dict(stat=stat, pvalue=pval, significant=pval < 0.05, alpha_star=alpha_star)
+
+
+def permutation_null_d2(X, Y, alphas, l1_ratio=0.5, fold_ids=None, n_folds=5, family="poisson",
+                        n_perm=200, seed=0, L0=1.0, max_iter=2000, tol=1e-8):
+    """Per-unit significance of held-out D^2 against a circular-shift null. The response is
+    circularly shifted relative to the design by random offsets (preserving each signal's own
+    autocorrelation while destroying the design relationship); D^2 is recomputed each time.
+    p = (1 + #{null D^2 >= observed}) / (n_perm + 1). Returns dict d2_obs, pvalue, significant."""
+    X = jnp.asarray(X); Y = jnp.asarray(Y); T, U = Y.shape
+    kw = dict(L0=L0, max_iter=max_iter, tol=tol)
+    folds = make_folds(T, n_folds, fold_ids)
+    alpha_star, _ = cv_select_alpha(X, Y, alphas, l1_ratio, fold_ids, n_folds, family, L0, max_iter, tol)
+    dev, devnull = _heldout_deviance(X, Y, alpha_star, l1_ratio, folds, family, kw)
+    d2_obs = 1.0 - dev / np.clip(devnull, 1e-10, None)
+    Ynp = np.asarray(Y)
+    rng = np.random.default_rng(seed)
+    null_ge = np.zeros(U)
+    for _ in range(n_perm):
+        sh = int(rng.integers(T // 10, T - T // 10))         # avoid near-zero shifts
+        Yp = jnp.asarray(np.roll(Ynp, sh, axis=0))
+        dp, d0 = _heldout_deviance(X, Yp, alpha_star, l1_ratio, folds, family, kw)
+        null_ge += (1.0 - dp / np.clip(d0, 1e-10, None)) >= d2_obs
+    pval = (1.0 + null_ge) / (n_perm + 1.0)
+    return dict(d2_obs=d2_obs, pvalue=pval, significant=pval < 0.05, alpha_star=alpha_star)

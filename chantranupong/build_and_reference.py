@@ -15,10 +15,13 @@ event-construction details need not match lynne_pp exactly; that matters only fo
 published-CSV reproduction. jaxGLM-gaussian and sklearn-ElasticNet share an identical objective,
 so at the same (alpha, l1_ratio) they should converge to the same weights.
 """
-import os
+import os, sys
 import numpy as np
 from pynwb import NWBHDF5IO
 from sklearn.linear_model import ElasticNet
+
+sys.path.insert(0, "/n/home02/twheatcroft/jaxGLM")
+import design as dz                                        # shift-kernel construction
 
 DIR = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/chantranupong"
 NWB = os.path.join(DIR, "WT63_20211112.nwb")
@@ -42,13 +45,7 @@ print(f"T={T} | trials={len(rew)} valid_photometry={valid.sum()} | "
       f"side_in_index range [{np.nanmin(si):.0f}, {np.nanmax(si):.0f}]")
 
 
-def indicator(idx):
-    v = np.zeros(T)
-    idx = idx[np.isfinite(idx)]
-    idx = idx[(idx >= 0) & (idx < T)].astype(int)
-    v[idx] = 1.0
-    return v
-
+indicator = lambda idx: dz.events_from_indices(idx, T)     # design.py builds the indicators
 
 vr, vn = valid & (rew > 0), valid & (rew == 0)
 base = {
@@ -62,11 +59,7 @@ licks = (np.asarray(eo["left_lick_event_onsets"].data[:]) +
 base["sl"] = (licks > 0).astype(float)
 print("events per predictor:", {p: int(base[p].sum()) for p in PRED})
 
-cols, names = [], []
-for p in PRED:
-    for s in SHIFTS:
-        cols.append(np.roll(base[p], s)); names.append(f"{p}_{s}")
-X = np.stack(cols, 1)                                     # (T, 7*len(SHIFTS))
+X, names = dz.build_design({p: base[p] for p in PRED}, SHIFTS)   # zero-fill shift kernels
 mean = X.mean(0); std = X.std(0); std[std < 1e-8] = 1.0
 Xz = (X - mean) / std
 print(f"X: {X.shape} | Y: {Y.shape}")

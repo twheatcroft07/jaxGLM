@@ -34,5 +34,12 @@ ok = (w_corr > 0.99) and (w_maxdiff < 0.02) and np.max(np.abs(r2_jax - r2_ref)) 
 print("\nCHANTRANUPONG GAUSSIAN LEVEL A:",
       "PASS -- jaxGLM gaussian reproduces sklearn ElasticNet on real photometry" if ok
       else "REVIEW -- agreement below threshold")
+
+# kernel figure (design.py column names -> per-predictor kernels)
+import viz
+names = d["names"]
+fig = viz.plot_kernels(W, names, dt=1.0 / 18.5, mean_sem=False)
+fig.savefig(os.path.join(DIR, "chantranupong_kernels.png"), dpi=90)
+print(f"kernel figure -> {os.path.join(DIR, 'chantranupong_kernels.png')}")
 np.savez(os.path.join(DIR, "chantranupong_result.npz"),
          W_jax=W, W_ref=W_ref, r2_jax=r2_jax, r2_ref=r2_ref, w_corr=w_corr, passed=ok)
