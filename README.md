@@ -202,6 +202,9 @@ in **bins**; counts are dimensionless. Seconds enter only at binning; bins are u
     `neurencoding`): per-unit **D² corr 1.0000**, **weight corr 0.9988** ([`ibl/`](ibl)).
   - **Gaussian / photometry** — Chantranupong 2023 (DANDI 001767) vs `ElasticNet` (≈ Sabatini
     `sglm`): **R² agree to 7e-4**, **weight corr 0.9963** ([`chantranupong/`](chantranupong)).
+  - **Gaussian / neural, vs published scores** — Reinhold (DVN/QPQEC9) vs `ElasticNet` (lab
+    `sglm`/`k-glm`) at the lab's own hyperparameters: jaxGLM reproduces the **published per-neuron
+    holdout R²** (correlation **0.915**), median matches ([`kim/`](kim)).
 
 ## Roadmap
 
