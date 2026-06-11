@@ -28,8 +28,14 @@ code; this is here so a person can understand the model and the data flow.)
 
 ### What it fits
 
-For each recorded unit (neuron), jaxGLM fits a **Poisson generalized linear model** that predicts
-the unit's spike count in each time bin from a set of behavioral/task predictors:
+jaxGLM fits a **generalized linear model** for each recorded unit. It supports two response
+families, chosen with a `family` argument: **`"poisson"`** (the default — for spike counts) and
+**`"gaussian"`** (for continuous signals such as fiber photometry). Everything below describes
+the Poisson case; the Gaussian case is identical except the link is the identity, the loss is
+least squares, and D² becomes ordinary R².
+
+For each unit, the Poisson model predicts the unit's spike count in each time bin from a set of
+behavioral/task predictors:
 
 ```
 eta = X · w + b           (linear predictor)
@@ -115,8 +121,8 @@ arguments are positional. [`test_synthetic.py`](test_synthetic.py) is a worked e
 - [ ] Per-unit cross-validated λ selection
 - [ ] Predictor-subset leave-out → ΔD² (predictor importance)
 - [ ] Significance testing (intercept-null Wilcoxon; permutation/shuffle null)
-- [ ] IBL Level-A comparison harness
-- [ ] Gaussian/linear family (continuous signals, e.g. photometry)
+- [x] IBL Level-A comparison harness (jaxGLM reproduces sklearn/neurencoding on real BWM data)
+- [x] Gaussian/linear family (continuous signals, e.g. photometry)
 
 ## Repository layout
 

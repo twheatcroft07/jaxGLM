@@ -109,6 +109,31 @@ def main():
         assert np.allclose(np.asarray(Wg[i]), np.asarray(Wi), atol=1e-5), f"grid!=loop at alpha={a}"
     print("[4] grid fit matches looped fit across lambda grid")
 
+    # ---- 5. gaussian family: recovers weights and agrees with OLS/ridge closed form
+    rng = np.random.default_rng(1)
+    Xg = rng.standard_normal((4000, 10))
+    Wg_true = rng.standard_normal((10, 6))
+    bg_true = rng.uniform(-1, 1, size=6)
+    Yg = Xg @ Wg_true + bg_true[None, :] + 0.5 * rng.standard_normal((4000, 6))
+    Xgz, gmean, gstd = pg.standardize(jnp.asarray(Xg))
+    Ygj = jnp.asarray(Yg)
+    Wgz, bgz, _, _ = pg.fit_units(Xgz, Ygj, 1e-6, 0.0, 1.0, 3000, 1e-11, "gaussian")
+    Wg_raw, _ = jax.vmap(pg.unstandardize_weights, in_axes=(1, 0, None, None),
+                         out_axes=(1, 0))(Wgz, bgz, gmean, gstd)
+    g_corr = np.corrcoef(np.asarray(Wg_raw).ravel(), Wg_true.ravel())[0, 1]
+    mu_g = pg.predict_rate(Xgz, Wgz, bgz, "gaussian")
+    r2, _, _ = pg.frac_deviance_explained(Ygj, mu_g, Ygj.mean(0), "gaussian")
+    # closed-form OLS prediction on standardized X with intercept, for one unit
+    Xa = np.concatenate([np.asarray(Xgz), np.ones((4000, 1))], 1)
+    beta_ols = np.linalg.lstsq(Xa, Yg[:, 0], rcond=None)[0]
+    mu_ols = Xa @ beta_ols
+    mu_jax0 = np.asarray(mu_g[:, 0])
+    ols_err = np.max(np.abs(mu_ols - mu_jax0)) / (np.std(Yg[:, 0]))
+    print(f"[5] gaussian: weight corr={g_corr:.3f}  median R^2={np.median(np.asarray(r2)):.3f}  "
+          f"vs OLS max|Δμ|/σ={ols_err:.2e}")
+    assert g_corr > 0.99, "gaussian weight recovery too low"
+    assert ols_err < 1e-3, "gaussian fit disagrees with OLS closed form"
+
     print("\nALL CHECKS PASSED")
 
 
