@@ -37,9 +37,10 @@ X, names = dz.build_design({"stim": stim, "reward": reward}, shifts=range(-10, 3
 Xz, mean, std = pg.standardize(jnp.asarray(X))
 W, b, _, _ = pg.fit_units(Xz, jnp.asarray(Y), 0.01, 0.5, family="poisson")
 
-# 3. predictor importance (held-out ΔD²) and significance
-imp = enc.predictor_importance(X, Y, subsets={"stim": [...], "reward": [...]}, alphas=[1e-3, 1e-2, 1e-1])
-sig = enc.permutation_null_d2(X, Y, alphas=[1e-3, 1e-2, 1e-1])     # per-unit p-values
+# 3. predictor importance (held-out ΔD²) and significance — data-driven alpha grid, CV per unit
+alphas = enc.alpha_grid(Xz, jnp.asarray(Y), l1_ratio=0.5)         # log-spaced from alpha_max down
+imp = enc.predictor_importance(X, Y, subsets={"stim": [...], "reward": [...]}, alphas=alphas)
+sig = enc.permutation_null_d2(X, Y, alphas=alphas)                # per-unit p-values
 
 # 4. plot the fitted kernels
 viz.plot_kernels(W, names, dt=0.02, mean_sem=True).savefig("kernels.png")
@@ -131,9 +132,14 @@ reproductions do this).
 
 **Regularization (`alpha`, `l1_ratio`) — select it, don't guess.** `l1_ratio` sets the penalty
 type (`0`=ridge, `1`=lasso, between=elastic net); `alpha` sets the strength. Don't hand-pick
-`alpha` — cross-validate it: `encoding.cv_select_alpha(X, Y, alphas, …)` returns a **per-unit**
-`alpha`, or `fit_units_grid` sweeps the grid. Provide `alphas` spanning a few orders of magnitude
-(e.g. `[1e-4, 1e-3, 1e-2, 1e-1, 1]`).
+`alpha`, and don't guess the *range* either — get it from the data with
+**`encoding.alpha_grid(Xz, Y, l1_ratio)`**. It returns a log-spaced grid from **`alpha_max`** (the
+smallest `alpha` that zeros *all* weights — the KKT bound `max_j|X_jᵀ(y−mean y)|/(T·l1_ratio)`)
+down to `alpha_max·1e-3`, so the sweep is guaranteed to bracket the useful range. Then
+`encoding.cv_select_alpha(X, Y, alphas, …)` picks each unit's `alpha` by held-out deviance.
+Standardize `X` first (above) or the grid is meaningless. If many units land on the smallest grid
+value, widen with `ratio=1e-4`. (Ridge has no finite `alpha_max`; `alpha_grid` uses a small
+surrogate `l1_ratio` to set the scale.)
 
 **CV folds — avoid temporal leakage.** `n_folds` / `fold_ids` control the splits. Bins within a
 trial are correlated, so random per-bin folds leak signal across train/test and inflate D². Pass

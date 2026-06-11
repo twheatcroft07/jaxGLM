@@ -31,6 +31,16 @@ def make_data(T=6000, U=8, family="poisson", seed=0):
 
 def run(family):
     X, Y = make_data(family=family)
+
+    # alpha_grid: the top of the data-driven grid (alpha_max) should zero (nearly) all weights
+    import jax.numpy as jnp, poisson_glm as pg
+    Xs = np.asarray(pg.standardize(jnp.asarray(X))[0])
+    ag = enc.alpha_grid(Xs, Y, l1_ratio=0.5)
+    Wtop, _, _, _ = pg.fit_units(jnp.asarray(Xs), jnp.asarray(Y), float(ag[-1]), 0.5, 1.0, 1500, 1e-8, family)
+    frac_zero = np.mean(np.abs(np.asarray(Wtop)) < 1e-6)
+    print(f"[{family}/alpha_grid] range=[{ag[0]:.2g}, {ag[-1]:.2g}] | weights zeroed at alpha_max={frac_zero:.2f}")
+    assert frac_zero > 0.9, "alpha_max should zero (nearly) all weights"
+
     subsets = {"informative": np.arange(0, 5), "noise": np.arange(5, 10)}
     res = enc.predictor_importance(X, Y, subsets, ALPHAS, l1_ratio=0.5, n_folds=5,
                                    family=family, max_iter=2000, tol=1e-8)

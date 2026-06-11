@@ -46,6 +46,29 @@ def _heldout_deviance(X, Y, alpha_per_unit, l1_ratio, folds, family, kw):
     return dev, devnull
 
 
+def alpha_grid(X, Y, l1_ratio=0.5, n=50, ratio=1e-3):
+    """Data-driven log-spaced elastic-net `alpha` grid for cross-validation.
+
+    Returns `n` alphas from `alpha_max` (the smallest alpha that zeros ALL weights) down to
+    `alpha_max * ratio`, log-spaced — the standard glmnet-style range, computed from the data
+    rather than guessed. `alpha_max` is the KKT bound at w=0 for the mean-loss objective:
+
+        alpha_max = max_j |X_jᵀ (y − mean(y))| / (T · l1_ratio)
+
+    `X` should be standardized `(T, P)`; `Y` is `(T, U)` and the grid covers every unit (top =
+    max alpha_max across units). Family-agnostic: `mean(y)` is the intercept-only prediction for
+    both Poisson and Gaussian. For ridge (`l1_ratio≈0`) a small surrogate l1_ratio avoids the
+    division by zero and gives a sensible scale (same grid shape). Feed the result to
+    `cv_select_alpha` / `predictor_importance` / the significance tests.
+    """
+    X = np.asarray(X); Y = np.asarray(Y); T = Y.shape[0]
+    lr = max(float(l1_ratio), 1e-2)
+    r0 = Y - Y.mean(0)[None, :]                          # intercept-only residual, per unit
+    amax = (np.abs(X.T @ r0) / T).max(0) / lr            # per-unit alpha_max -> (U,)
+    top = max(float(amax.max()), 1e-8)
+    return np.geomspace(top * ratio, top, n)
+
+
 def cv_select_alpha(X, Y, alphas, l1_ratio=0.5, fold_ids=None, n_folds=5, family="poisson",
                     L0=1.0, max_iter=2000, tol=1e-8):
     """Pick alpha per unit minimizing held-out deviance. Returns (alpha_star (U,), cv_dev (A,U))."""
