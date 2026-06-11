@@ -50,7 +50,7 @@ def test_kernel_recovery():
 
     # viz smoke tests -> PNGs on netscratch
     mu = pg.predict_rate(jnp.asarray(X), W, b, "gaussian")
-    viz.plot_kernels(np.asarray(W), names, dt=1 / 18.5, mean_sem=False).savefig(f"{OUT}/kernels.png", dpi=80)
+    viz.plot_kernels(np.asarray(W), names, bin_width=1 / 18.5, mean_sem=False).savefig(f"{OUT}/kernels.png", dpi=80)
     viz.plot_reconstruction(np.asarray(Y), np.asarray(mu), unit=0, window=(0, 1500)).savefig(f"{OUT}/recon.png", dpi=80)
     viz.plot_event_reconstruction(np.asarray(Y), np.asarray(mu), ev, unit=0, pre=5, post=K).savefig(f"{OUT}/event_recon.png", dpi=80)
     for f in ("kernels.png", "recon.png", "event_recon.png"):

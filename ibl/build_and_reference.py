@@ -35,10 +35,10 @@ lut = -np.ones(label.size, dtype=int); lut[good] = np.arange(U)
 print(f"good units: {U}")
 
 # ---- binning / window
-DT = 0.02
+BIN_S = 0.02
 PRE, POST = 0.5, 2.0
-NB = int(round((PRE + POST) / DT))          # bins per trial
-S0 = int(round(PRE / DT))                    # bin index of stimulus onset
+NB = int(round((PRE + POST) / BIN_S))          # bins per trial
+S0 = int(round(PRE / BIN_S))                    # bin index of stimulus onset
 L_STIM, L_MOVE, L_FB = 20, 25, 25            # FIR lag counts per event
 NCOL = L_STIM + L_MOVE + L_FB + 1
 valid = ~np.isnan(stimOn)
@@ -52,21 +52,13 @@ SHIFTS = {"stim": range(0, L_STIM), "move": range(0, L_MOVE),
           "feedback": range(0, L_FB), "contrast": [0]}
 X_blocks, Y_blocks, names = [], [], None
 for ti in tidx:
-    t0 = stimOn[ti] - PRE
-    m = (st >= t0) & (st < t0 + NB * DT)
-    bi = np.clip(((st[m] - t0) / DT).astype(int), 0, NB - 1)
-    col = lut[sc[m]]; keep = col >= 0
-    Ytr = np.zeros((NB, U)); np.add.at(Ytr, (bi[keep], col[keep]), 1.0)
-
-    stim = np.zeros(NB); stim[S0] = 1.0
-    mv = np.zeros(NB)
-    if not np.isnan(move[ti]):
-        mb = int(round((move[ti] - stimOn[ti] + PRE) / DT))
-        if 0 <= mb < NB: mv[mb] = 1.0
-    fbv = np.zeros(NB)
-    if not np.isnan(feedback[ti]):
-        fbb = int(round((feedback[ti] - stimOn[ti] + PRE) / DT))
-        if 0 <= fbb < NB: fbv[fbb] = 1.0
+    t0 = stimOn[ti] - PRE                                       # window start (s)
+    m = (st >= t0) & (st < t0 + NB * BIN_S)                     # spikes in this window
+    Ytr = dz.bin_spikes(st[m], lut[sc[m]], U, t0, BIN_S, NB)    # counts (NB, U)
+    # event indicators from event TIMES (events_from_times drops NaN / out-of-window)
+    stim = dz.events_from_times([stimOn[ti]], t0, BIN_S, NB)
+    mv = dz.events_from_times([move[ti]], t0, BIN_S, NB)
+    fbv = dz.events_from_times([feedback[ti]], t0, BIN_S, NB)
     contrast = np.zeros(NB); contrast[S0:] = signed[ti]
     Xtr, names = dz.build_design({"stim": stim, "move": mv, "feedback": fbv, "contrast": contrast}, SHIFTS)
     X_blocks.append(Xtr); Y_blocks.append(Ytr)

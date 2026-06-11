@@ -38,7 +38,7 @@ print("\nCHANTRANUPONG GAUSSIAN LEVEL A:",
 # kernel figure (design.py column names -> per-predictor kernels)
 import viz
 names = d["names"]
-fig = viz.plot_kernels(W, names, dt=1.0 / 18.5, mean_sem=False)
+fig = viz.plot_kernels(W, names, bin_width=1.0 / 18.5, mean_sem=False)
 fig.savefig(os.path.join(DIR, "chantranupong_kernels.png"), dpi=90)
 print(f"kernel figure -> {os.path.join(DIR, 'chantranupong_kernels.png')}")
 np.savez(os.path.join(DIR, "chantranupong_result.npz"),

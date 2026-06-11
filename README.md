@@ -15,7 +15,7 @@ a session at once** on a single GPU. Supports **Poisson** (spike counts) and **G
 
 | module | what it does |
 |---|---|
-| [`design.py`](design.py) | Build a **shift-kernel design matrix** `X` from event/regressor time series (`build_design`); parse fitted weights back into per-predictor kernels (`kernels_from_weights`). |
+| [`design.py`](design.py) | **Bin** raw spike/event/signal times onto a grid (`bin_spikes`, `events_from_times`, `resample_continuous`), build a **shift-kernel design matrix** `X` (`build_design`), and parse fitted weights back into per-predictor kernels (`kernels_from_weights`). |
 | [`poisson_glm.py`](poisson_glm.py) | The **GPU solver**: batched elastic-net GLM fit over all units (FISTA), `family="poisson"`/`"gaussian"`, plus deviance / D² / R² helpers. |
 | [`encoding.py`](encoding.py) | The **encoding model**: per-unit cross-validated λ (`cv_select_alpha`), held-out predictor-subset **ΔD²** (`predictor_importance`), and **significance** (`wilcoxon_full_vs_null`, `permutation_null_d2`). |
 | [`viz.py`](viz.py) | **Plots**: per-predictor kernels vs lag, predicted-vs-actual reconstruction, event-aligned averages. |
@@ -26,8 +26,12 @@ A typical end-to-end run:
 import jax.numpy as jnp
 import design as dz, poisson_glm as pg, encoding as enc, viz
 
-# 1. design matrix: expand events into shift-kernels (here a ±0.5 s window at 20 ms bins)
-X, names = dz.build_design({"stim": stim_onset, "reward": reward_onset}, shifts=range(-10, 30))
+# 1. bin raw times onto a grid (bin_width in SECONDS), then expand events into shift-kernels
+t0, bin_width, n_bins = 0.0, 0.02, 60_000                              # 20 ms bins
+Y = dz.bin_spikes(spike_times, spike_units, n_units, t0, bin_width, n_bins)   # (n_bins, n_units) counts
+stim   = dz.events_from_times(stim_times,   t0, bin_width, n_bins)
+reward = dz.events_from_times(reward_times, t0, bin_width, n_bins)
+X, names = dz.build_design({"stim": stim, "reward": reward}, shifts=range(-10, 30))  # bin lags
 
 # 2. fit every unit at once  (family="gaussian" for photometry)
 Xz, mean, std = pg.standardize(jnp.asarray(X))
@@ -105,11 +109,14 @@ into dense GPU matmuls — what CPU tools (sklearn one neuron at a time) cannot 
 
 Beyond `X` and `Y`, a handful of choices drive the results. What you provide, and how to pick it:
 
-**Bin size / sampling (`dt`).** `X` and `Y` must be on the *same* time grid; the bin width sets
-temporal resolution. Finer bins → sharper kernels but more bins (more compute) and sparser counts
-(Poisson). Photometry: use the native rate (e.g. 18.5 Hz). Spikes: 10–50 ms bins are typical.
-`dt` is also what `viz.plot_kernels(..., dt=…)` uses to label lags in seconds. Binning `Y` onto
-this grid is on you.
+**Binning (`bin_width`, seconds).** The library bins raw times onto the grid: `design.bin_spikes`
+(spike times → count matrix `Y`), `design.events_from_times` (event times → indicators),
+`design.resample_continuous` (a continuous signal onto the grid). All take times and `bin_width`
+in **seconds**, and `X`/`Y` come out on the same grid. The bin width is the single most
+consequential preprocessing choice: finer bins → sharper kernels but more bins (more compute) and
+sparser Poisson counts. Photometry: the native rate (~18.5 Hz → `bin_width ≈ 0.054`). Spikes:
+10–50 ms. Downstream everything is indexed in **bins**; `bin_width` only reappears to label plot
+axes in seconds (`viz.plot_kernels(..., bin_width=…)`).
 
 **Predictors and the kernel window (`shifts`).** `design.build_design(predictors, shifts)`
 expands each event into time-shifted copies. `shifts` is the lag window — e.g. `range(-10, 30)`
@@ -144,15 +151,19 @@ p≈0.005, more for stricter thresholds. Each permutation refits, so it's the ma
 **Response (`Y`) must match the family.** Poisson: nonnegative integer counts per bin. Gaussian:
 any continuous value (e.g. z-scored dF/F).
 
-| param | where | quick guidance |
-|---|---|---|
-| `family` | `fit_units`, `encoding` | `"poisson"` counts · `"gaussian"` continuous |
-| `shifts` | `build_design` | lag window per predictor; cover expected response |
-| `alpha` | `fit_units` / `alphas` grid | **CV-select**, don't hardcode |
-| `l1_ratio` | `fit_units` | `0` ridge · `1` lasso · between elastic net |
-| `fold_ids` | `encoding.*` | group **whole trials** to avoid leakage |
-| `n_perm` | `permutation_null_d2` | ≥200; trades runtime for p-resolution |
-| `max_iter`/`tol` | `fit_units` | FISTA iteration cap / stopping tolerance |
+| param | units | where | quick guidance |
+|---|---|---|---|
+| `bin_width` | **seconds** | `bin_spikes` / `events_from_times` | defines the grid; most consequential choice |
+| `shifts` | **bins** (int lags) | `build_design` | lag window per predictor; cover expected response |
+| `family` | — | `fit_units`, `encoding` | `"poisson"` counts · `"gaussian"` continuous |
+| `alpha` | — | `fit_units` / `alphas` grid | **CV-select**, don't hardcode |
+| `l1_ratio` | — (0–1) | `fit_units` | `0` ridge · `1` lasso · between elastic net |
+| `fold_ids` | — | `encoding.*` | group **whole trials** to avoid leakage |
+| `n_perm` | count | `permutation_null_d2` | ≥200; trades runtime for p-resolution |
+| `max_iter` / `tol` | iters / — | `fit_units` | iteration cap / stopping tolerance |
+
+Times in (raw inputs, `bin_width`) are **seconds**; `shifts` and everything inside the solver are
+in **bins**; counts are dimensionless. Seconds enter only at binning; bins are used thereafter.
 
 ## Validation
 
@@ -162,6 +173,11 @@ any continuous value (e.g. z-scored dF/F).
 - **Encoding & significance** ([`test_encoding.py`](test_encoding.py),
   [`test_significance.py`](test_significance.py)): ΔD² isolates an informative predictor group
   from a noise group; the significance tests flag real-signal units and not noise units.
+- **Significance calibration** ([`test_significance_calibration.py`](test_significance_calibration.py),
+  the proper reference — does the FPR equal α under the null?): the **Wilcoxon** full-vs-null test
+  is well-behaved but *conservative* (FPR ≈ 0.005–0.01 at α=0.05); the **circular-shift permutation**
+  test is currently *anti-conservative* (FPR ≈ 0.10–0.13) — it over-calls and **needs recalibration
+  before use** (re-select α inside each shuffle). Both have full power on strong signal.
 - **Published references on real public data — both families.** Each fits an *identical* design
   matrix with jaxGLM and with the standard scikit-learn fitter the relevant lab tool wraps,
   isolating the solver:
@@ -173,9 +189,10 @@ any continuous value (e.g. z-scored dF/F).
 ## Roadmap
 
 - [x] Core FISTA elastic-net solver (Poisson + Gaussian), vmapped over units / λ-grid
-- [x] Shift-kernel design-matrix construction (`design.py`)
+- [x] Raw-times binning + shift-kernel design construction (`design.py`)
 - [x] Per-unit cross-validated λ selection + held-out subset ΔD² (`encoding.py`)
-- [x] Significance testing — Wilcoxon full-vs-null + circular-shift permutation null
+- [x] Significance: Wilcoxon full-vs-null (calibrated, slightly conservative)
+- [ ] Recalibrate the permutation null (currently anti-conservative — re-select α per shuffle)
 - [x] Visualization — kernels, reconstruction, event-aligned averages (`viz.py`)
 - [x] Real-data reproductions: IBL (Poisson) and Chantranupong (Gaussian)
 - [ ] Logistic / multinomial family (choice / RL behavioral models)
