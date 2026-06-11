@@ -44,3 +44,10 @@ print("\nLEVEL A:", "PASS -- jaxGLM reproduces the sklearn/neurencoding referenc
 np.savez(os.path.join(DIR, "level_a_result.npz"),
          d2_jax=d2_jax, d2_ref=d2_ref, W_jax=W, W_ref=W_ref,
          d2_corr=d2_corr, d2_maxdiff=d2_maxdiff, w_corr=w_corr, passed=ok)
+
+# kernel figure: per-event encoding kernels (mean +/- s.e.m. across units)
+import viz
+names = d["names"]
+fig = viz.plot_kernels(W, names, dt=0.02, mean_sem=True)
+fig.savefig(os.path.join(DIR, "ibl_kernels.png"), dpi=90)
+print(f"kernel figure -> {os.path.join(DIR, 'ibl_kernels.png')}")

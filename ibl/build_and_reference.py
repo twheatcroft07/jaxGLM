@@ -9,9 +9,12 @@ The exact basis doesn't matter for Level A: the SAME X is handed to both fitters
 comparison isolates the solver. We fit near the MLE (tiny ridge) so a unique convex optimum
 exists and both solvers must converge to it regardless of regularization conventions.
 """
-import os
+import os, sys
 import numpy as np
 from sklearn.linear_model import PoissonRegressor
+
+sys.path.insert(0, "/n/home02/twheatcroft/jaxGLM")
+import design as dz                                        # shift-kernel construction
 
 DIR = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/ibl_level_a"
 d = np.load(os.path.join(DIR, "session_raw.npz"), allow_pickle=True)
@@ -42,32 +45,30 @@ valid = ~np.isnan(stimOn)
 tidx = np.where(valid)[0]
 print(f"trials used: {tidx.size} | bins/trial: {NB} | predictors: {NCOL}")
 
-X_blocks, Y_blocks = [], []
+# FIR kernels via design.build_design, built per trial window. Because each window is isolated,
+# build_design's zero-fill clips forward shifts at the window edge -- identical to the previous
+# hand-coded `if b < NB` construction, but now with proper '{event}_{lag}' column names.
+SHIFTS = {"stim": range(0, L_STIM), "move": range(0, L_MOVE),
+          "feedback": range(0, L_FB), "contrast": [0]}
+X_blocks, Y_blocks, names = [], [], None
 for ti in tidx:
     t0 = stimOn[ti] - PRE
-    edges0 = t0
-    m = (st >= edges0) & (st < edges0 + NB * DT)
-    bi = np.clip(((st[m] - edges0) / DT).astype(int), 0, NB - 1)
-    col = lut[sc[m]]
-    keep = col >= 0
-    Ytr = np.zeros((NB, U))
-    np.add.at(Ytr, (bi[keep], col[keep]), 1.0)
+    m = (st >= t0) & (st < t0 + NB * DT)
+    bi = np.clip(((st[m] - t0) / DT).astype(int), 0, NB - 1)
+    col = lut[sc[m]]; keep = col >= 0
+    Ytr = np.zeros((NB, U)); np.add.at(Ytr, (bi[keep], col[keep]), 1.0)
 
-    Xtr = np.zeros((NB, NCOL))
-    for k in range(L_STIM):                          # stimulus onset FIR
-        if S0 + k < NB: Xtr[S0 + k, k] = 1.0
-    if not np.isnan(move[ti]):                        # first-movement FIR
+    stim = np.zeros(NB); stim[S0] = 1.0
+    mv = np.zeros(NB)
+    if not np.isnan(move[ti]):
         mb = int(round((move[ti] - stimOn[ti] + PRE) / DT))
-        for k in range(L_MOVE):
-            b = mb + k
-            if 0 <= b < NB: Xtr[b, L_STIM + k] = 1.0
-    if not np.isnan(feedback[ti]):                    # feedback FIR
-        fb = int(round((feedback[ti] - stimOn[ti] + PRE) / DT))
-        for k in range(L_FB):
-            b = fb + k
-            if 0 <= b < NB: Xtr[b, L_STIM + L_MOVE + k] = 1.0
-    Xtr[S0:, NCOL - 1] = signed[ti]                   # signed contrast, on from stim onset
-
+        if 0 <= mb < NB: mv[mb] = 1.0
+    fbv = np.zeros(NB)
+    if not np.isnan(feedback[ti]):
+        fbb = int(round((feedback[ti] - stimOn[ti] + PRE) / DT))
+        if 0 <= fbb < NB: fbv[fbb] = 1.0
+    contrast = np.zeros(NB); contrast[S0:] = signed[ti]
+    Xtr, names = dz.build_design({"stim": stim, "move": mv, "feedback": fbv, "contrast": contrast}, SHIFTS)
     X_blocks.append(Xtr); Y_blocks.append(Ytr)
 
 X = np.concatenate(X_blocks, 0)
@@ -91,5 +92,5 @@ print(f"sklearn reference: median D^2 = {np.median(d2_ref):.4f} | "
 
 out = os.path.join(DIR, "level_a_compare.npz")
 np.savez(out, Xz=Xz, Y=Y, W_ref=W_ref, b_ref=b_ref, d2_ref=d2_ref,
-         alpha=ALPHA, mean=mean, std=std, ncol=NCOL, n_units=U)
+         alpha=ALPHA, mean=mean, std=std, ncol=NCOL, n_units=U, names=np.array(names))
 print(f"saved -> {out}")
