@@ -5,6 +5,7 @@ Run on a GPU node: conda activate jaxGLM && python test_solver_robustness.py
 """
 import numpy as np
 import jax.numpy as jnp
+import pytest
 import poisson_glm as pg
 
 
@@ -25,6 +26,7 @@ def test_wellposed_unchanged():
     assert r2(y, mu) > 0.98 and np.corrcoef(np.asarray(W)[:, 0], w)[0, 1] > 0.99
 
 
+@pytest.mark.slow      # 300k-iter fit on a 100-col collinear design -- run on GPU (-m slow)
 def test_illconditioned_no_divergence():
     # build a deliberately collinear design: duplicate/near-duplicate columns + shifted copies
     rng = np.random.default_rng(1)

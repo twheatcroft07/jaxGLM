@@ -112,11 +112,15 @@ def run(config_path):
     tg = trial_groups[keep] if trial_groups is not None else None
     print(f"  X {X.shape} ({len(names)} kernels), Y {Y.shape} ({len(resp_names)} responses)")
 
+    kw = dict(L0=1.0, max_iter=int(g["max_iter"]), tol=float(g["tol"]))
+    fold_ids = trial_fold_ids(tg, int(cv["n_folds"])) if cv.get("group_by_trial") else None
+
+    import validate                                         # fail loud on a degenerate design
+    validate.check_design(X, Y, family=family, names=names, fold_ids=fold_ids)
+
     Xz, mean, std = pg.standardize(jnp.asarray(X)) if g.get("standardize", True) else (
         jnp.asarray(X), None, None)
     Yj = jnp.asarray(Y)
-    kw = dict(L0=1.0, max_iter=int(g["max_iter"]), tol=float(g["tol"]))
-    fold_ids = trial_fold_ids(tg, int(cv["n_folds"])) if cv.get("group_by_trial") else None
 
     print("[3/6] selecting regularization (alpha)")
     alpha_spec = g["alpha"]
@@ -127,11 +131,17 @@ def run(config_path):
                                             family, **kw)
         print(f"  alpha per unit: median {np.median(alpha_star):.4g} "
               f"[{alpha_star.min():.3g}, {alpha_star.max():.3g}]")
-        W, b, _, _ = pg.fit_units_alpha(Xz, Yj, jnp.asarray(alpha_star), l1, *kw.values(), family)
+        W, b, n_iter, conv = pg.fit_units_alpha(Xz, Yj, jnp.asarray(alpha_star), l1,
+                                                *kw.values(), family)
     else:
         alpha_star = np.full(Y.shape[1], float(alpha_spec))
-        W, b, _, _ = pg.fit_units(Xz, Yj, float(alpha_spec), l1, *kw.values(), family)
+        W, b, n_iter, conv = pg.fit_units(Xz, Yj, float(alpha_spec), l1, *kw.values(), family)
         print(f"  fixed alpha {float(alpha_spec):.4g}")
+
+    health = validate.fit_health(W, b, conv, n_iter, int(g["max_iter"]), names=resp_names)
+    print(f"  fit health: {health['n_converged']}/{health['n_units']} converged "
+          f"(median {health['median_iters']} iters)"
+          + (f", {health['n_extreme']} with extreme weights" if health['n_extreme'] else ""))
 
     mu = pg.predict_rate(Xz, W, b, family)
     mu0 = jnp.broadcast_to(Yj.mean(0)[None, :], Yj.shape)
@@ -173,7 +183,7 @@ def run(config_path):
     fit_path = os.path.join(models_dir, "fit.npz")
     save = dict(W=np.asarray(W_raw), b=np.asarray(b_raw), names=np.array(names),
                 responses=np.array(resp_names), alpha=np.asarray(alpha_star), l1_ratio=l1,
-                family=family, d2=d2)
+                family=family, d2=d2, converged=np.asarray(conv))
     for p, v in importance.items():
         save[f"delta_d2__{p}"] = v
     if wilcoxon is not None:
