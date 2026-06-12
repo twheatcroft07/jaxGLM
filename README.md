@@ -250,6 +250,13 @@ in **bins**; counts are dimensionless. Seconds enter only at binning; bins are u
   (or read permutation p as a lower bound). All have full power on strong signal. (The earlier
   version was worse — FPR ≈ 0.10–0.13 — because it reused an α tuned on the observed alignment for
   the shuffles.)
+- **Calibration under realistic autocorrelation**
+  ([`test_autocorr_calibration.py`](test_autocorr_calibration.py)): the iid check above doesn't
+  exercise the temporal autocorrelation the circular-shift null is *for*. On AR(1) ρ=0.95 nulls
+  (independent of an autocorrelated event-kernel design) the tests still hold: **Wilcoxon** FPR
+  0.000 (gaussian) / 0.017 (poisson) — conservative-safe; **permutation** FPR 0.067 / 0.042 —
+  near-nominal. So the circular-shift null does its job on realistic data. (Wilcoxon's strong
+  conservatism is safe against false positives but can cost power on *weak* effects.)
 - **Published references on real public data — both families.** Each fits an *identical* design
   matrix with jaxGLM and with the standard scikit-learn fitter the relevant lab tool wraps,
   isolating the solver:
