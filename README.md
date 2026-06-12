@@ -231,11 +231,15 @@ in **bins**; counts are dimensionless. Seconds enter only at binning; bins are u
   from a noise group; the significance tests flag real-signal units and not noise units.
 - **Significance calibration** ([`test_significance_calibration.py`](test_significance_calibration.py),
   the proper reference — does the FPR equal α under the null?): the **Wilcoxon** full-vs-null test
-  is well-behaved but *conservative* (FPR ≈ 0.005–0.01 at α=0.05); the **circular-shift permutation**
-  test is calibrated by keeping the observed fit and the shuffles **exchangeable** — a *fixed* α
-  applied to both (fast, the default), with an opt-in per-shuffle-CV path (`select_alpha=True`) for
-  the CV-selected-D² statistic. (The earlier anti-conservative version reused an α tuned on the
-  observed alignment for the shuffles.) Both have full power on strong signal.
+  is well-behaved but *conservative* (FPR ≈ 0.005–0.01 at α=0.05, both families). The
+  **circular-shift permutation** test keeps the observed fit and the shuffles **exchangeable** by
+  applying a *fixed* α to both (fast, the default; opt-in per-shuffle-CV via `select_alpha=True`):
+  **Gaussian is well-calibrated** (FPR ≈ 0.06 fast / 0.025 faithful, p-values uniform). **Poisson
+  is still mildly anti-conservative** (FPR ≈ 0.095) — circular-shift nulls don't fully destroy
+  count structure under the log link — so for strict Poisson significance prefer the Wilcoxon test
+  (or read permutation p as a lower bound). All have full power on strong signal. (The earlier
+  version was worse — FPR ≈ 0.10–0.13 — because it reused an α tuned on the observed alignment for
+  the shuffles.)
 - **Published references on real public data — both families.** Each fits an *identical* design
   matrix with jaxGLM and with the standard scikit-learn fitter the relevant lab tool wraps,
   isolating the solver:
