@@ -31,6 +31,13 @@ NeMoS exposes a stateful, scikit-learn-style **single-fit** API (`GLM`/`Populati
 Python loop — hundreds to thousands of **separate LBFGS solves**, no fixed-`X` reuse. The gap is
 **architectural, not incidental**: it cannot be closed without reaching into NeMoS internals.
 
+This is confirmed by NeMoS's own documentation, not just our measurement: their
+[cross-validation how-to](https://nemos.readthedocs.io/en/latest/how_to_guide/plot_06_sklearn_pipeline_cv_demo.html)
+delegates CV/λ selection to scikit-learn `GridSearchCV`, which calls `.fit()` once per (fold, λ)
+combination — an external Python loop by design. (See the broader survey in
+[related-work.md](related-work.md): no existing tool batches the whole outer loop of a penalized
+encoding GLM onto the GPU.)
+
 **Measured:** a permutation-null *test* (n_perm=100, both families) ran **>25 minutes** on NeMoS
 before we killed it; the equivalent batched version on jaxGLM runs in **seconds**.
 

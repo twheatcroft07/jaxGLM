@@ -15,6 +15,14 @@ a session at once** on a single GPU. Supports **Poisson** (spike counts) and **G
 > engine and kept jaxGLM's own batched solver — the encoding workload is refit-heavy (permutation
 > null, CV, ablation) and needs `vmap` batching that NeMoS's single-fit API can't do. Full
 > reasoning in [docs/engine-decision.md](docs/engine-decision.md).
+>
+> **Is this novel?** A June-2026 survey ([docs/related-work.md](docs/related-work.md)) found no
+> packaged tool that batches the *entire* refit-heavy outer loop (units × λ × folds × ablations ×
+> permutation shuffles) of a **penalized Poisson/Gaussian encoding GLM** into one GPU kernel. The
+> closest cousins — NeMoS (loops the outer axes via scikit-learn `GridSearchCV`) and GPU
+> permutation inference in neuroimaging (FSL `randomise`; batches shuffles but on *unpenalized
+> mass-univariate* models) — occupy the two circles whose empty intersection jaxGLM fills. Not a
+> new primitive; a new combination.
 
 ## Pipeline at a glance
 
