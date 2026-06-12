@@ -114,6 +114,23 @@ def test_alpha_grid_max_zeros_all_weights():
     assert np.allclose(np.asarray(W), 0.0, atol=1e-6)          # alpha_max kills all weights (KKT)
 
 
+def test_absolute_lag_convention_independent_groundtruth():
+    # Ground truth built WITHOUT design.shift_signal: y[t] = sum_k h[k]*e[t-k] via np.convolve.
+    # Catches a time-reversal / off-by-one in the lag convention that test_kernel_recovery cannot
+    # (that one uses shift_signal for BOTH data-gen and fit, so a shared-convention bug is invisible).
+    rng = np.random.default_rng(0)
+    T, K = 4000, 20
+    e = np.zeros(T); e[rng.choice(T, 200, replace=False)] = 1.0
+    h = np.arange(K + 1, dtype=float)                    # asymmetric ramp -> a flip is obvious
+    y = np.convolve(e, h)[:T]                            # causal: y[t] = sum_k h[k] * e[t-k]
+    X, names = dz.build_design({"e": e}, range(0, K + 1))
+    W, _, _, _ = pg.fit_units(jnp.asarray(X), jnp.asarray(y[:, None]), 1e-6, 0.0, 1.0, 8000, 1e-11, "gaussian")
+    rec = np.asarray(dz.kernels_from_weights(np.asarray(W), names)["e"][1])[:, 0]  # recovered h at lag +k
+    assert np.corrcoef(rec, h)[0, 1] > 0.999, "recovered kernel != true kernel (convention/solver bug)"
+    assert np.corrcoef(rec, h[::-1])[0, 1] < 0.9, "kernel is TIME-REVERSED (lag-sign bug)"
+    assert rec[-1] > rec[0], "kernel orientation flipped vs the true increasing ramp"
+
+
 def test_permutation_warns_for_poisson():
     rng = np.random.default_rng(7)
     X = rng.standard_normal((300, 3))
