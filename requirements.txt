@@ -1,0 +1,10 @@
+# Runtime + dev dependencies for jaxGLM.
+# NOTE: jax is installed SEPARATELY because the build differs by target:
+#   - cluster / GPU:  pip install "jax[cuda12]"   (see install_env.sh)
+#   - CI / CPU:       pip install jax              (CPU wheel; see .github/workflows/ci.yml)
+numpy
+scipy
+pandas
+pyyaml
+matplotlib
+pytest

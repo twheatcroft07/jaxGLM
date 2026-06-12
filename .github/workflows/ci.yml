@@ -1,0 +1,26 @@
+name: CI
+
+# Runs the fast CPU test tier on every push / PR. The GPU-scale tests (-m slow) and the real-data
+# reproduction pins (cluster-only, they skip when netscratch isn't present) are not run here --
+# they need a GPU and the lab data, so they stay on the cluster (run_pytest.sh / run_*.sh).
+on:
+  push:
+  pull_request:
+
+jobs:
+  cpu-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU JAX + deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install jax                       # CPU wheel
+          pip install -r requirements.txt
+      - name: Fast CPU test tier
+        env:
+          JAX_PLATFORMS: cpu
+        run: pytest -m "not slow" -q

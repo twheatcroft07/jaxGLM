@@ -6,6 +6,7 @@ kernel / reconstruction / event-aligned plots to PNGs (on netscratch) to confirm
 Run on a GPU node: conda activate jaxGLM && python test_design_viz.py
 """
 import os
+import tempfile
 import numpy as np
 import jax.numpy as jnp
 
@@ -13,7 +14,9 @@ import design as dz
 import viz
 import poisson_glm as pg
 
-OUT = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/jaxglm_viz"
+# write figures to netscratch on the cluster, else a temp dir (so this runs in CI without netscratch)
+_NS = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/jaxglm_viz"
+OUT = _NS if os.path.isdir(os.path.dirname(_NS)) else os.path.join(tempfile.gettempdir(), "jaxglm_viz")
 os.makedirs(OUT, exist_ok=True)
 
 
