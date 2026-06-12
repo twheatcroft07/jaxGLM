@@ -28,7 +28,8 @@ a session at once** on a single GPU. Supports **Poisson** (spike counts) and **G
 
 | module | what it does |
 |---|---|
-| [`design.py`](design.py) | **Bin** raw spike/event/signal times onto a grid (`bin_spikes`, `events_from_times`, `resample_continuous`), build a **shift-kernel design matrix** `X` (`build_design`), and parse fitted weights back into per-predictor kernels (`kernels_from_weights`). |
+| [`design.py`](design.py) | **Bin** raw spike/event/signal times onto a grid (`bin_spikes`, `events_from_times`, `resample_continuous`), build a **shift-kernel design matrix** `X` (`build_design`, with **boundary-aware shifting** so kernels never cross session/trial joins — `group_ids_from_labels`), and parse fitted weights back into per-predictor kernels (`kernels_from_weights`). |
+| [`run_pipeline.py`](run_pipeline.py) + [`project.py`](project.py) | **Config-driven CLI**: scaffold a project (`--new`), then run binning→design→fit→importance→significance→plots from a single `config.yaml`. |
 | [`poisson_glm.py`](poisson_glm.py) | The **GPU solver**: batched elastic-net GLM fit over all units (FISTA), `family="poisson"`/`"gaussian"`, deviance / D² / R², and the objective decomposition (`objective_terms`). |
 | [`encoding.py`](encoding.py) | The **encoding model**: data-driven `alpha_grid`, per-unit CV λ (`cv_select_alpha`), held-out subset **ΔD²** (`predictor_importance`), **significance** (`wilcoxon_full_vs_null`, `permutation_null_d2`), and the **regularization path** (`regularization_path`). |
 | [`viz.py`](viz.py) | **Plots**: kernels vs lag, predicted-vs-actual reconstruction, event-aligned averages, and the regularization-scale figure (`plot_regularization_path`). |
@@ -58,6 +59,25 @@ sig = enc.permutation_null_d2(X, Y, alphas=alphas)                # per-unit p-v
 # 4. plot the fitted kernels
 viz.plot_kernels(W, names, dt=0.02, mean_sem=True).savefig("kernels.png")
 ```
+
+## Command-line pipeline
+
+For a turnkey run (no Python scripting), use the config-driven CLI. Scaffold a project, edit its
+`config.yaml`, drop already-binned long-format CSVs into `data/`, then run:
+
+```bash
+python run_pipeline.py --new my_project        # scaffold my_project/{data,results,models}+config.yaml
+#   ... edit my_project/config.yaml, add CSVs to my_project/data/ ...
+python run_pipeline.py my_project/config.yaml  # (on a GPU node) fit + importance + significance + plots
+```
+
+The data contract mirrors the lab `sglm` workflow: each CSV row is one time bin, with a **session
+column** (groups bins for boundary-aware shifts), an optional **trial column** (trial-grouped CV
+folds), **predictor** columns (events or continuous regressors), and **response** columns (one GLM
+per neuron/channel). The `config.yaml` exposes family, `l1_ratio`, `alpha` (`cv`/float/grid),
+per-predictor shift windows, CV, and which significance tests to run; the schema is documented in
+[`project.py`](project.py). Outputs land in `models/fit.npz` + `results/{summary.csv,kernels.png,
+reconstruction.png}`.
 
 ## Installation
 
@@ -169,7 +189,13 @@ unbounded.)
 trial are correlated, so random per-bin folds leak signal across train/test and inflate D². Pass
 `fold_ids` grouping **whole trials** (one id per trial or block) so held-out data is genuinely
 independent — this matters for honest D² *and* significance. Contiguous-block folds (the default)
-are a reasonable fallback.
+are a reasonable fallback. (The CLI builds trial-grouped folds automatically from `trial_col`.)
+
+**Concatenating sessions — boundary-aware shifts.** If you stack several sessions/trials into one
+grid, pass `groups=` to `build_design` (a per-bin session/trial label, e.g. from
+`design.group_ids_from_labels`) so a kernel near a boundary doesn't pull data across it. This is the
+`sglm` `shift_bounding_column` behaviour; without it, `shift_signal` zero-fills only at the very
+ends, so internal session joins would leak. The CLI does this from `session_col` automatically.
 
 **Predictor subsets (`subsets`).** For ΔD² you define the groups to ablate as
 `{name: column_indices}`. The `names` returned by `build_design` make it easy to grab all shifts
@@ -206,8 +232,10 @@ in **bins**; counts are dimensionless. Seconds enter only at binning; bins are u
 - **Significance calibration** ([`test_significance_calibration.py`](test_significance_calibration.py),
   the proper reference — does the FPR equal α under the null?): the **Wilcoxon** full-vs-null test
   is well-behaved but *conservative* (FPR ≈ 0.005–0.01 at α=0.05); the **circular-shift permutation**
-  test is currently *anti-conservative* (FPR ≈ 0.10–0.13) — it over-calls and **needs recalibration
-  before use** (re-select α inside each shuffle). Both have full power on strong signal.
+  test is calibrated by keeping the observed fit and the shuffles **exchangeable** — a *fixed* α
+  applied to both (fast, the default), with an opt-in per-shuffle-CV path (`select_alpha=True`) for
+  the CV-selected-D² statistic. (The earlier anti-conservative version reused an α tuned on the
+  observed alignment for the shuffles.) Both have full power on strong signal.
 - **Published references on real public data — both families.** Each fits an *identical* design
   matrix with jaxGLM and with the standard scikit-learn fitter the relevant lab tool wraps,
   isolating the solver:
@@ -225,12 +253,15 @@ in **bins**; counts are dimensionless. Seconds enter only at binning; bins are u
 - [x] Raw-times binning + shift-kernel design construction (`design.py`)
 - [x] Per-unit cross-validated λ selection + held-out subset ΔD² (`encoding.py`)
 - [x] Significance: Wilcoxon full-vs-null (calibrated, slightly conservative)
-- [ ] Recalibrate the permutation null (currently anti-conservative — re-select α per shuffle)
+- [x] Permutation null fixed — fast fixed-α default (exchangeable/valid) + opt-in per-shuffle-CV (`select_alpha`)
+- [x] Boundary-aware shifting (`build_design(groups=…)`) — kernels don't cross session/trial joins
+- [x] Config-driven CLI + project scaffolding (`run_pipeline.py`, `project.py`)
 - [x] Visualization — kernels, reconstruction, event-aligned averages (`viz.py`)
 - [x] Real-data reproductions: IBL (Poisson) and Chantranupong (Gaussian)
 - [ ] Logistic / multinomial family (choice / RL behavioral models)
 - [ ] Match a published kernel figure exactly (Chantranupong "Level B": replicate `lynne_pp` preprocessing)
-- [ ] Trial-aware CV-fold helper; config-driven batch runner
+- [ ] Smoothness (2nd-derivative) kernel penalty — the one modeling knob GLM_Tensorflow_2 had that this lacks
+- [ ] Chunked batch axes for oversized designs (see [docs/sparse-and-memory.md](docs/sparse-and-memory.md))
 
 ## Repository layout
 

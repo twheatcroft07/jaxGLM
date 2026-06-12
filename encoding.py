@@ -179,25 +179,59 @@ def wilcoxon_full_vs_null(X, Y, alphas, l1_ratio=0.5, fold_ids=None, n_folds=10,
     return dict(stat=stat, pvalue=pval, significant=pval < 0.05, alpha_star=alpha_star)
 
 
-def permutation_null_d2(X, Y, alphas, l1_ratio=0.5, fold_ids=None, n_folds=5, family="poisson",
-                        n_perm=200, seed=0, L0=1.0, max_iter=2000, tol=1e-8):
+def _cv_selected_d2(X, Y, alphas, l1_ratio, fold_ids, n_folds, family, kw):
+    """Held-out D^2 per unit AFTER selecting alpha by CV on this same (X, Y). This is the full
+    statistic whose null distribution the permutation test approximates -- alpha selection is part
+    of it, so it must be re-run on every shuffle (see permutation_null_d2)."""
+    folds = make_folds(Y.shape[0], n_folds, fold_ids)
+    alpha_star, _ = cv_select_alpha(X, Y, alphas, l1_ratio, fold_ids, n_folds, family,
+                                    kw["L0"], kw["max_iter"], kw["tol"])
+    dev, devnull = _heldout_deviance(X, Y, alpha_star, l1_ratio, folds, family, kw)
+    return 1.0 - dev / np.clip(devnull, 1e-10, None), alpha_star
+
+
+def permutation_null_d2(X, Y, alpha, l1_ratio=0.5, fold_ids=None, n_folds=5, family="poisson",
+                        n_perm=200, seed=0, select_alpha=False, L0=1.0, max_iter=2000, tol=1e-8):
     """Per-unit significance of held-out D^2 against a circular-shift null. The response is
     circularly shifted relative to the design by random offsets (preserving each signal's own
-    autocorrelation while destroying the design relationship); D^2 is recomputed each time.
-    p = (1 + #{null D^2 >= observed}) / (n_perm + 1). Returns dict d2_obs, pvalue, significant."""
+    autocorrelation while destroying the design relationship); the statistic is recomputed each
+    time. p = (1 + #{null D^2 >= observed}) / (n_perm + 1). Returns dict d2_obs, pvalue, significant.
+
+    Validity hinges on the observed fit and the shuffles being *exchangeable* under H0 -- i.e. the
+    exact same Y -> D^2 procedure applied to each. Two ways to get that:
+
+    * FAST (default, `select_alpha=False`): `alpha` is a FIXED regularization (scalar or per-unit
+      (U,)) used identically for the observed fit and every shuffle. Each shuffle is then just one
+      held-out CV pass -- no inner alpha search -- so it's ~len(grid) x cheaper. For the test to be
+      valid `alpha` must not be tuned to the observed design alignment (pass a standard value, or an
+      alpha chosen on separate data; using the full-fit CV alpha is the common pragmatic choice and
+      only mildly optimistic).
+
+    * FAITHFUL (`select_alpha=True`): `alpha` is treated as a CV *grid* and re-selected by
+      cross-validation inside the observed fit AND inside every shuffle, making the *CV-selected*
+      D^2 the test statistic. Correct but ~len(grid)*n_folds x slower per shuffle. NB selecting
+      alpha once on the observed data and reusing it for the shuffles (without re-selecting) is
+      anti-conservative -- it hands the observed fit an alpha tuned to its own (possibly spurious)
+      structure while the null can't -- which is exactly why this is all-or-nothing.
+
+    Calibration (FPR ~ alpha, p-values ~ uniform) is checked in test_significance_calibration.py."""
     X = jnp.asarray(X); Y = jnp.asarray(Y); T, U = Y.shape
     kw = dict(L0=L0, max_iter=max_iter, tol=tol)
-    folds = make_folds(T, n_folds, fold_ids)
-    alpha_star, _ = cv_select_alpha(X, Y, alphas, l1_ratio, fold_ids, n_folds, family, L0, max_iter, tol)
-    dev, devnull = _heldout_deviance(X, Y, alpha_star, l1_ratio, folds, family, kw)
-    d2_obs = 1.0 - dev / np.clip(devnull, 1e-10, None)
+    if select_alpha:
+        stat = lambda Yp: _cv_selected_d2(X, Yp, alpha, l1_ratio, fold_ids, n_folds, family, kw)[0]
+    else:
+        folds = make_folds(T, n_folds, fold_ids)
+        a = np.broadcast_to(np.asarray(alpha, dtype=float), (U,)).copy()
+        def stat(Yp):
+            dev, devnull = _heldout_deviance(X, Yp, a, l1_ratio, folds, family, kw)
+            return 1.0 - dev / np.clip(devnull, 1e-10, None)
+    d2_obs = stat(Y)
     Ynp = np.asarray(Y)
     rng = np.random.default_rng(seed)
     null_ge = np.zeros(U)
     for _ in range(n_perm):
         sh = int(rng.integers(T // 10, T - T // 10))         # avoid near-zero shifts
         Yp = jnp.asarray(np.roll(Ynp, sh, axis=0))
-        dp, d0 = _heldout_deviance(X, Yp, alpha_star, l1_ratio, folds, family, kw)
-        null_ge += (1.0 - dp / np.clip(d0, 1e-10, None)) >= d2_obs
+        null_ge += stat(Yp) >= d2_obs
     pval = (1.0 + null_ge) / (n_perm + 1.0)
-    return dict(d2_obs=d2_obs, pvalue=pval, significant=pval < 0.05, alpha_star=alpha_star)
+    return dict(d2_obs=np.asarray(d2_obs), pvalue=pval, significant=pval < 0.05)

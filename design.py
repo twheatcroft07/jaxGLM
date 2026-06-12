@@ -58,8 +58,15 @@ def resample_continuous(sample_times, values, t_start, bin_width, n_bins):
     return out / np.maximum(cnt, 1.0)
 
 
-def shift_signal(v, k):
-    """Shift a 1-D array by k samples with zero fill. +k moves values forward in time (later)."""
+def shift_signal(v, k, groups=None):
+    """Shift a 1-D array by k samples with zero fill. +k moves values forward in time (later).
+
+    If `groups` (length-T labels, one per bin) is given, the shift is confined within each group:
+    a value is never pulled across a group boundary (zero-filled instead). Use this to stop event
+    kernels from bleeding across session/trial boundaries when blocks are concatenated into one
+    grid -- the jaxGLM equivalent of sglm's `shift_bounding_column='SessionName'`. Groups are
+    assumed contiguous (the usual time-ordered case); a value at destination bin i is kept only if
+    its source bin i-k carries the same label."""
     v = np.asarray(v, dtype=float)
     out = np.zeros_like(v)
     if k == 0:
@@ -68,6 +75,13 @@ def shift_signal(v, k):
         out[k:] = v[:-k]
     else:
         out[:k] = v[-k:]
+    if groups is not None:
+        g = np.asarray(groups)
+        idx = np.arange(len(v))
+        src = idx - k                                   # destination i pulls from source i-k
+        same = (src >= 0) & (src < len(v))
+        same[same] &= g[src[same]] == g[idx[same]]      # ...only if same group label
+        out[~same] = 0.0
     return out
 
 
@@ -83,7 +97,7 @@ def events_from_indices(indices, T):
     return v
 
 
-def build_design(predictors, shifts):
+def build_design(predictors, shifts, groups=None):
     """Expand predictors into a shift-kernel design matrix.
 
     predictors : dict {name: 1-D array length T} -- event indicators or continuous regressors,
@@ -91,6 +105,11 @@ def build_design(predictors, shifts):
     shifts     : integer BIN lags -- a range / list applied to every predictor, OR a dict
                  {name: list_of_shifts} for per-predictor windows. (To express a window in
                  seconds, divide by bin_width: e.g. +/-0.5 s at 20 ms -> range(-25, 26).)
+    groups     : optional length-T labels (e.g. session or trial id per bin). When given, shifts
+                 do not cross group boundaries -- essential when several sessions/trials are
+                 concatenated into one grid, so a kernel near a boundary doesn't pull data from
+                 the neighbouring block. The sglm `shift_bounding_column` equivalent. Build it with
+                 `group_ids_from_labels`.
     Returns (X (T, total_shifts), names) where names are '{predictor}_{shift}'. No intercept
     column (the solver adds the intercept). Pass X to standardize()/fit_units().
     """
@@ -100,9 +119,23 @@ def build_design(predictors, shifts):
         sh = shifts[name] if isinstance(shifts, dict) else list(shifts)
         v = np.asarray(predictors[name], dtype=float)
         for k in sh:
-            cols.append(shift_signal(v, k))
+            cols.append(shift_signal(v, k, groups))
             names.append(f"{name}_{k}")
     return np.stack(cols, 1), names
+
+
+def group_ids_from_labels(*label_arrays):
+    """Turn one or more per-bin label arrays (e.g. SessionName, or SessionName + TrialNumber) into
+    a contiguous integer group id per bin, for `build_design(..., groups=...)`. A new id starts
+    whenever any label changes between consecutive bins (so distinct blocks that happen to reuse a
+    label are still separated). Returns int array (T,)."""
+    cols = [np.asarray(a) for a in label_arrays]
+    T = len(cols[0])
+    changed = np.zeros(T, dtype=bool)
+    changed[0] = True
+    for c in cols:
+        changed[1:] |= c[1:] != c[:-1]
+    return np.cumsum(changed) - 1
 
 
 def kernels_from_weights(W, names):
