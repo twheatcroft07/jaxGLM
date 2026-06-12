@@ -11,6 +11,11 @@ a session at once** on a single GPU. Supports **Poisson** (spike counts) and **G
 
 ---
 
+> **Engine note:** we evaluated [NeMoS](https://github.com/flatironinstitute/nemos) as the GLM
+> engine and kept jaxGLM's own batched solver — the encoding workload is refit-heavy (permutation
+> null, CV, ablation) and needs `vmap` batching that NeMoS's single-fit API can't do. Full
+> reasoning in [docs/engine-decision.md](docs/engine-decision.md).
+
 ## Pipeline at a glance
 
 | module | what it does |
