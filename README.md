@@ -247,6 +247,10 @@ in **bins**; counts are dimensionless. Seconds enter only at binning; bins are u
     `neurencoding`): per-unit **D² corr 1.0000**, **weight corr 0.9988** ([`ibl/`](ibl)).
   - **Gaussian / photometry** — Chantranupong 2023 (DANDI 001767) vs `ElasticNet` (≈ Sabatini
     `sglm`): **R² agree to 7e-4**, **weight corr 0.9963** ([`chantranupong/`](chantranupong)).
+    "Level B" reproduces the fit on the lab's *own* preprocessed `lynne_pp` dataframe — matched on
+    the **identifiable output** (reconstruction): **R² 0.387 vs 0.381**, **recon corr 0.984**.
+    Coefficients can't match exactly (the raw shifted-event design is collinear, so they're
+    under-determined; jaxGLM also fits *standardized* X for stability — see the FISTA note below).
   - **Gaussian / neural, vs published scores** — Reinhold (DVN/QPQEC9) vs `ElasticNet` (lab
     `sglm`/`k-glm`) at the lab's own hyperparameters: jaxGLM reproduces the **published per-neuron
     holdout R²** (correlation **0.915**), median matches ([`kim/`](kim)).
@@ -262,9 +266,9 @@ in **bins**; counts are dimensionless. Seconds enter only at binning; bins are u
 - [x] Config-driven CLI + project scaffolding (`run_pipeline.py`, `project.py`)
 - [x] Visualization — kernels, reconstruction, event-aligned averages (`viz.py`)
 - [x] Real-data reproductions: IBL (Poisson) and Chantranupong (Gaussian)
+- [x] Chantranupong "Level B" — reproduce the lab's `lynne_pp` fit (matched on reconstruction; see Validation)
 - [ ] Logistic / multinomial family (choice / RL behavioral models)
-- [ ] Match a published kernel figure exactly (Chantranupong "Level B": replicate `lynne_pp` preprocessing)
-- [ ] Smoothness (2nd-derivative) kernel penalty — the one modeling knob GLM_Tensorflow_2 had that this lacks
+- [ ] FISTA robustness on raw ill-conditioned designs — add a monotone/restart guard (it can diverge with many iters; standardizing X is the current fix)
 - [ ] Chunked batch axes for oversized designs (see [docs/sparse-and-memory.md](docs/sparse-and-memory.md))
 
 ## Repository layout
