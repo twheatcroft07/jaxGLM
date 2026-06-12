@@ -111,6 +111,9 @@ def fit_one(X, y, alpha, l1_ratio, L0=1.0, max_iter=500, tol=1e-7, family="poiss
     w0 = jnp.zeros(P)
     b0 = b0_fn(y)                                 # family-specific intercept warm start
 
+    def full_obj(w, b):                              # the objective FISTA minimizes (smooth + L1)
+        return smooth_f(w, b) + l1 * jnp.sum(jnp.abs(w))
+
     def prox_step(v_w, v_b, gw, gb, L):
         # gradient step at the accelerated point, then prox (soft-threshold on w only)
         z_w = _soft_threshold(v_w - gw / L, l1 / L)
@@ -140,22 +143,33 @@ def fit_one(X, y, alpha, l1_ratio, L0=1.0, max_iter=500, tol=1e-7, family="poiss
         return z_w, z_b, L_out
 
     def cond(state):
-        w, b, w_prev, b_prev, t, L, it, change = state
+        w, b, w_prev, b_prev, t, L, it, change, f_cur = state
         return jnp.logical_and(it < max_iter, change > tol)
 
     def body(state):
-        w, b, w_prev, b_prev, t, L, it, _change = state
+        # Monotone FISTA with adaptive restart (Beck-Teboulle MFISTA + O'Donoghue-Candes): take the
+        # accelerated proximal step, but only ACCEPT it if it doesn't increase the objective;
+        # otherwise keep the current iterate and RESET the momentum (t->1). This guarantees a
+        # non-increasing objective, so the solver can't diverge even on raw ill-conditioned designs
+        # (where plain FISTA's momentum can blow up). Costs one extra objective eval per step.
+        w, b, w_prev, b_prev, t, L, it, _change, f_cur = state
         mom = (t - 1.0) / ((1.0 + jnp.sqrt(1.0 + 4.0 * t * t)) / 2.0)
         v_w = w + mom * (w - w_prev)
         v_b = b + mom * (b - b_prev)
         z_w, z_b, L_new = backtrack(v_w, v_b, L)
-        t_new = (1.0 + jnp.sqrt(1.0 + 4.0 * t * t)) / 2.0
+        f_z = full_obj(z_w, z_b)
+        accept = f_z <= f_cur                         # monotone guard
+        x_w = jnp.where(accept, z_w, w)
+        x_b = jnp.where(accept, z_b, b)
+        f_new = jnp.where(accept, f_z, f_cur)
+        t_new = jnp.where(accept, (1.0 + jnp.sqrt(1.0 + 4.0 * t * t)) / 2.0, 1.0)  # restart on reject
         denom = jnp.maximum(jnp.sqrt(jnp.vdot(w, w)) + jnp.abs(b), 1e-12)
-        change = (jnp.sqrt(jnp.vdot(z_w - w, z_w - w)) + jnp.abs(z_b - b)) / denom
-        return (z_w, z_b, w, b, t_new, L_new, it + 1, change)
+        moved = (jnp.sqrt(jnp.vdot(x_w - w, x_w - w)) + jnp.abs(x_b - b)) / denom
+        change = jnp.where(accept, moved, jnp.inf)    # a rejected/restart step is not convergence
+        return (x_w, x_b, w, b, t_new, L_new, it + 1, change, f_new)
 
-    init = (w0, b0, w0, b0, 1.0, L0, 0, jnp.inf)
-    w, b, _wp, _bp, _t, _L, it, change = lax.while_loop(cond, body, init)
+    init = (w0, b0, w0, b0, 1.0, L0, 0, jnp.inf, full_obj(w0, b0))
+    w, b, _wp, _bp, _t, _L, it, change, _f = lax.while_loop(cond, body, init)
     return w, b, it, change <= tol
 
 

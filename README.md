@@ -268,7 +268,7 @@ in **bins**; counts are dimensionless. Seconds enter only at binning; bins are u
 - [x] Real-data reproductions: IBL (Poisson) and Chantranupong (Gaussian)
 - [x] Chantranupong "Level B" — reproduce the lab's `lynne_pp` fit (matched on reconstruction; see Validation)
 - [ ] Logistic / multinomial family (choice / RL behavioral models)
-- [ ] FISTA robustness on raw ill-conditioned designs — add a monotone/restart guard (it can diverge with many iters; standardizing X is the current fix)
+- [x] FISTA robustness — monotone restart guard (MFISTA): objective is non-increasing, so the solver no longer diverges on raw ill-conditioned designs ([`test_solver_robustness.py`](test_solver_robustness.py))
 - [ ] Chunked batch axes for oversized designs (see [docs/sparse-and-memory.md](docs/sparse-and-memory.md))
 
 ## Repository layout
