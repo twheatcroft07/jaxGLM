@@ -13,7 +13,6 @@ import os, sys
 import numpy as np
 from sklearn.linear_model import PoissonRegressor
 
-sys.path.insert(0, "/n/home02/twheatcroft/jaxGLM")
 import design as dz                                        # shift-kernel construction
 
 DIR = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/ibl_level_a"

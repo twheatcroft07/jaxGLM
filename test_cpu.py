@@ -114,6 +114,15 @@ def test_alpha_grid_max_zeros_all_weights():
     assert np.allclose(np.asarray(W), 0.0, atol=1e-6)          # alpha_max kills all weights (KKT)
 
 
+def test_permutation_warns_for_poisson():
+    rng = np.random.default_rng(7)
+    X = rng.standard_normal((300, 3))
+    Y = rng.poisson(1.0, size=(300, 2)).astype(float)
+    with pytest.warns(UserWarning, match="anti-conservative for Poisson"):
+        enc.permutation_null_d2(X, Y, 0.05, l1_ratio=0.5, n_folds=3, family="poisson",
+                                n_perm=2, max_iter=200)
+
+
 def test_kernels_from_weights_roundtrip():
     e = dz.events_from_indices([10, 50, 120, 300], 500)
     X, names = dz.build_design({"evt": e, "other": np.roll(e, 3)}, range(-2, 5))

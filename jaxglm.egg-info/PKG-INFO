@@ -1,3 +1,21 @@
+Metadata-Version: 2.4
+Name: jaxglm
+Version: 0.1.0
+Summary: GPU-accelerated elastic-net GLM for neural encoding (Poisson + Gaussian) in JAX/FISTA.
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy
+Requires-Dist: scipy
+Requires-Dist: pandas
+Requires-Dist: pyyaml
+Provides-Extra: cpu
+Requires-Dist: jax; extra == "cpu"
+Provides-Extra: viz
+Requires-Dist: matplotlib; extra == "viz"
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: matplotlib; extra == "dev"
+
 # jaxGLM
 
 **GPU-accelerated elastic-net GLM for neural encoding.** A full pipeline — from event-kernel
@@ -66,11 +84,10 @@ For a turnkey run (no Python scripting), use the config-driven CLI. Scaffold a p
 `config.yaml`, drop already-binned long-format CSVs into `data/`, then run:
 
 ```bash
-jaxglm --new my_project          # scaffold my_project/{data,results,models} + config.yaml
+python run_pipeline.py --new my_project        # scaffold my_project/{data,results,models}+config.yaml
 #   ... edit my_project/config.yaml, add CSVs to my_project/data/ ...
-jaxglm my_project/config.yaml    # (on a GPU node) fit + importance + significance + plots
+python run_pipeline.py my_project/config.yaml  # (on a GPU node) fit + importance + significance + plots
 ```
-(`jaxglm` is the installed console script; `python run_pipeline.py …` works too.)
 
 The data contract mirrors the lab `sglm` workflow: each CSV row is one time bin, with a **session
 column** (groups bins for boundary-aware shifts), an optional **trial column** (trial-grouped CV
@@ -82,24 +99,15 @@ reconstruction.png}`.
 
 ## Installation
 
-jaxGLM is a normal pip-installable package (`pyproject.toml`); JAX is installed separately because
-the build differs by target (GPU vs CPU):
+Builds are heavy, so they run as SLURM jobs on a GPU node, not on a login node:
 
 ```bash
-# GPU cluster (heavy build -> run as a SLURM job on a GPU node, not the login node):
-sbatch install_env.sh          # conda env `jaxGLM`: jax[cuda12] + `pip install -e .`
-
-# CPU / laptop / CI:
-pip install jax                # CPU wheel
-pip install -e ".[dev]"        # jaxGLM + numpy/scipy/pandas/pyyaml + pytest + matplotlib
+sbatch install_env.sh          # creates conda env `jaxGLM` (jax[cuda12] + optax + sci stack)
 ```
 
-The editable install puts the modules on the path, so the reproduction scripts (and your own code)
-`import poisson_glm` from anywhere — no `sys.path` hacks. It also installs a **`jaxglm` console
-script** (`jaxglm --new NAME`, `jaxglm config.yaml`). `install_env.sh` routes package caches off
-`$HOME`; its log shows `devices [CudaDevice(id=0)]` when JAX sees the GPU. `requirements-lock.txt`
-records a known-good frozen environment. Run the test suite with `pytest` (fast CPU tier;
-`pytest -m slow` adds the GPU-scale tests).
+The script routes package caches off `$HOME`. When it finishes, its log shows
+`devices [CudaDevice(id=0)]`, confirming JAX sees the GPU. (`matplotlib` is needed only for
+`viz.py`.)
 
 ## How it works
 

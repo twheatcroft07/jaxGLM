@@ -1,0 +1,14 @@
+numpy
+scipy
+pandas
+pyyaml
+
+[cpu]
+jax
+
+[dev]
+pytest
+matplotlib
+
+[viz]
+matplotlib

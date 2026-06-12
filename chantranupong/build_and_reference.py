@@ -20,7 +20,6 @@ import numpy as np
 from pynwb import NWBHDF5IO
 from sklearn.linear_model import ElasticNet
 
-sys.path.insert(0, "/n/home02/twheatcroft/jaxGLM")
 import design as dz                                        # shift-kernel construction
 
 DIR = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/chantranupong"

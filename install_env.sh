@@ -32,7 +32,11 @@ conda activate "$ENV"
 export PYTHONNOUSERSITE=1
 
 # jax with bundled CUDA 12 wheels (self-contained; no cluster CUDA modules needed).
-pip install --upgrade "jax[cuda12]" optax numpy scipy pandas pyyaml
+pip install --upgrade "jax[cuda12]" optax matplotlib
+
+# install jaxGLM itself (editable) so its modules import from anywhere -- this is what lets the
+# reproduction scripts `import poisson_glm` without sys.path hacks. Pulls numpy/scipy/pandas/pyyaml.
+pip install -e /n/home02/twheatcroft/jaxGLM
 
 echo "=== sanity ==="
 python - <<'PY'

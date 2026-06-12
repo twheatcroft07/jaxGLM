@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jaxglm"
+version = "0.1.0"
+description = "GPU-accelerated elastic-net GLM for neural encoding (Poisson + Gaussian) in JAX/FISTA."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy", "pandas", "pyyaml"]
+# jax is intentionally NOT pinned here -- the build differs by target:
+#   GPU cluster:  pip install "jax[cuda12]"   (install_env.sh)
+#   CI / CPU:     pip install jax              (.github/workflows/ci.yml, or the [cpu] extra below)
+
+[project.optional-dependencies]
+cpu = ["jax"]                 # CPU JAX wheel (CI / laptops)
+viz = ["matplotlib"]          # only needed for viz.py
+dev = ["pytest", "matplotlib"]
+
+[project.scripts]
+jaxglm = "run_pipeline:main"  # `jaxglm config.yaml` / `jaxglm --new NAME`
+
+# Flat layout: install the top-level modules as importable modules (no src/ refactor needed),
+# which is what lets the reproduction scripts `import poisson_glm` without sys.path hacks.
+[tool.setuptools]
+py-modules = ["design", "encoding", "poisson_glm", "project", "validate", "viz", "run_pipeline"]

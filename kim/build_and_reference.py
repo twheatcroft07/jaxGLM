@@ -13,7 +13,6 @@ import pandas as pd
 import scipy.io as sio
 from sklearn.linear_model import ElasticNet
 
-sys.path.insert(0, "/n/home02/twheatcroft/jaxGLM")
 import design as dz
 
 G = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/kim/example datasets to run code/glm/forglm_trainingSet_wreach"

@@ -12,6 +12,7 @@ deviance on the held-out rows, against an intercept-only null also fit on train.
 an out-of-sample contribution, not an in-sample one. The per-unit lambda is selected first (on
 the full model) and then reused for the full and ablated fits -- a controlled ablation.
 """
+import warnings
 import numpy as np
 import jax.numpy as jnp
 from scipy.stats import wilcoxon
@@ -214,7 +215,14 @@ def permutation_null_d2(X, Y, alpha, l1_ratio=0.5, fold_ids=None, n_folds=5, fam
       anti-conservative -- it hands the observed fit an alpha tuned to its own (possibly spurious)
       structure while the null can't -- which is exactly why this is all-or-nothing.
 
-    Calibration (FPR ~ alpha, p-values ~ uniform) is checked in test_significance_calibration.py."""
+    Calibration (FPR ~ alpha, p-values ~ uniform) is checked in test_significance_calibration.py.
+    NOTE: well-calibrated for Gaussian (FPR ~ 0.06); mildly anti-conservative for Poisson
+    (FPR ~ 0.095) because circular-shift nulls don't fully destroy count structure under the log
+    link -- for strict Poisson significance prefer wilcoxon_full_vs_null."""
+    if family == "poisson":
+        warnings.warn("permutation_null_d2 is mildly anti-conservative for Poisson (FPR ~ 0.095 at "
+                      "alpha=0.05); prefer wilcoxon_full_vs_null, or read p as a lower bound.",
+                      stacklevel=2)
     X = jnp.asarray(X); Y = jnp.asarray(Y); T, U = Y.shape
     kw = dict(L0=L0, max_iter=max_iter, tol=tol)
     if select_alpha:

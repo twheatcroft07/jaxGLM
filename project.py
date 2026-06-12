@@ -58,8 +58,9 @@ cv:
   group_by_trial: true         # fold whole trials (avoids temporal leakage); needs trial_col
 
 significance:
-  run_wilcoxon: true           # CV-fold signed-rank full-vs-null (calibrated, conservative)
-  run_permutation: false       # circular-shift null (slower; re-selects alpha per shuffle)
+  run_wilcoxon: true           # CV-fold signed-rank full-vs-null (calibrated; preferred for Poisson)
+  run_permutation: false       # circular-shift null (well-calibrated for gaussian; mildly
+                               # anti-conservative for poisson -> use wilcoxon there)
   n_perm: 200
 
 outputs:

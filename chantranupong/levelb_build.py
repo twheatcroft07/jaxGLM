@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import ElasticNet   # mean-normalized objective == jaxGLM's (Ridge is NOT)
 
-sys.path.insert(0, "/n/home02/twheatcroft/jaxGLM")
 import design as dz
 
 REPO = "/n/home02/twheatcroft/code/sabatinilab-glm/sglm/outputs_clean/Figure_6/g1/-20_+20"

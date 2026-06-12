@@ -6,7 +6,6 @@ import os, sys
 import numpy as np
 import jax.numpy as jnp
 
-sys.path.insert(0, "/n/home02/twheatcroft/jaxGLM")
 import poisson_glm as pg
 import viz
 

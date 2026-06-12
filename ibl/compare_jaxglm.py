@@ -11,7 +11,6 @@ import os, sys
 import numpy as np
 import jax.numpy as jnp
 
-sys.path.insert(0, "/n/home02/twheatcroft/jaxGLM")
 import poisson_glm as pg
 
 DIR = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/ibl_level_a"
