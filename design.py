@@ -111,7 +111,10 @@ def build_design(predictors, shifts, groups=None):
                  the neighbouring block. The sglm `shift_bounding_column` equivalent. Build it with
                  `group_ids_from_labels`.
     Returns (X (T, total_shifts), names) where names are '{predictor}_{shift}'. No intercept
-    column (the solver adds the intercept). Pass X to standardize()/fit_units().
+    column (the solver adds the intercept). Next: z-score with `poisson_glm.standardize(X)`, then
+    fit with `poisson_glm.fit_units(Xz, Y, ...)` (or run `encoding.cv_select_alpha` /
+    `encoding.predictor_importance`). The solver, standardize, and family live in poisson_glm.py;
+    CV / importance / significance live in encoding.py.
     """
     keys = list(predictors)
     cols, names = [], []
