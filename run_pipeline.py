@@ -145,7 +145,8 @@ def run(config_path):
 
     mu = pg.predict_rate(Xz, W, b, family)
     mu0 = jnp.broadcast_to(Yj.mean(0)[None, :], Yj.shape)
-    d2 = np.asarray(pg.frac_deviance_explained(Yj, mu, mu0, family))
+    d2, _, _ = pg.frac_deviance_explained(Yj, mu, mu0, family)   # returns (d2, dev_m, dev_0)
+    d2 = np.asarray(d2)
     print(f"  in-sample D2: median {np.median(d2):.3f}")
 
     # un-standardize weights so saved kernels are in raw-X units

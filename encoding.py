@@ -71,22 +71,42 @@ def alpha_grid(X, Y, l1_ratio=0.5, n=50, ratio=1e-3):
 
 
 def cv_select_alpha(X, Y, alphas, l1_ratio=0.5, fold_ids=None, n_folds=5, family="poisson",
-                    L0=1.0, max_iter=2000, tol=1e-8):
-    """Pick alpha per unit minimizing held-out deviance. Returns (alpha_star (U,), cv_dev (A,U))."""
+                    L0=1.0, max_iter=2000, tol=1e-8, one_se=False):
+    """Pick alpha per unit by held-out deviance. Returns (alpha_star (U,), cv_dev (A,U)).
+
+    one_se=True applies the standard 1-SE rule: pick the LARGEST alpha (most regularization)
+    whose mean CV deviance is within one cross-fold standard error of that unit's minimum. This
+    guards against selecting the grid-floor alpha and overfitting on noisy units (which otherwise
+    drives held-out D^2 to large negatives, e.g. -99). Default False keeps the plain-argmin
+    behaviour the reproductions were validated against. `alphas` must be ascending (alpha_grid is).
+    """
     X = jnp.asarray(X); Y = jnp.asarray(Y)
     T, U = Y.shape
     folds = make_folds(T, n_folds, fold_ids)
     alphas = np.asarray(alphas)
-    cv_dev = np.zeros((len(alphas), U))
+    A, F = len(alphas), len(folds)
+    cv_dev_folds = np.zeros((A, F, U))
     allidx = np.arange(T)
-    for te in folds:
+    for fi, te in enumerate(folds):
         tr = np.setdiff1d(allidx, te)
         Wg, bg, _, _ = pg.fit_units_grid(X[tr], Y[tr], jnp.asarray(alphas), l1_ratio,
                                          L0, max_iter, tol, family)         # (A,P,U),(A,U)
-        for a in range(len(alphas)):
+        for a in range(A):
             mu = pg.predict_rate(X[te], Wg[a], bg[a], family)
-            cv_dev[a] += np.asarray(pg.deviance(Y[te], mu, family))
-    alpha_star = alphas[np.argmin(cv_dev, axis=0)]
+            cv_dev_folds[a, fi] = np.asarray(pg.deviance(Y[te], mu, family))
+    cv_dev = cv_dev_folds.sum(1)                                            # (A,U), unchanged return
+    if one_se:
+        cv_mean = cv_dev_folds.mean(1)                                      # (A,U)
+        cv_se = cv_dev_folds.std(1) / np.sqrt(max(F, 1))                    # (A,U)
+        u = np.arange(U)
+        best = np.argmin(cv_mean, axis=0)                                   # (U,)
+        thresh = cv_mean[best, u] + cv_se[best, u]                          # (U,)
+        within = cv_mean <= thresh[None, :]                                 # (A,U)
+        last_ok = (A - 1) - within[::-1].argmax(0)                          # largest-alpha index within 1SE
+        idx = np.where(within.any(0), last_ok, best)
+        alpha_star = alphas[idx]
+    else:
+        alpha_star = alphas[np.argmin(cv_dev, axis=0)]
     return alpha_star, cv_dev
 
 
@@ -112,10 +132,11 @@ def regularization_path(X, Y, alphas, l1_ratio=0.5, fold_ids=None, n_folds=5, fa
 
 
 def predictor_importance(X, Y, subsets, alphas, l1_ratio=0.5, fold_ids=None, n_folds=5,
-                         family="poisson", L0=1.0, max_iter=2000, tol=1e-8):
+                         family="poisson", L0=1.0, max_iter=2000, tol=1e-8, one_se=False):
     """Held-out D^2 of the full model and delta-D^2 for removing each predictor group.
 
     subsets: {group_name: array_of_column_indices_to_drop}.
+    one_se: pass through to cv_select_alpha's 1-SE rule (robust against grid-floor overfit).
     Returns dict with alpha_star (U,), d2_full (U,), delta_d2 {name: (U,)}, d2_subset {name:(U,)},
     and cv_dev (A,U).
     """
@@ -125,7 +146,7 @@ def predictor_importance(X, Y, subsets, alphas, l1_ratio=0.5, fold_ids=None, n_f
     folds = make_folds(T, n_folds, fold_ids)
 
     alpha_star, cv_dev = cv_select_alpha(X, Y, alphas, l1_ratio, fold_ids, n_folds, family,
-                                         L0, max_iter, tol)
+                                         L0, max_iter, tol, one_se=one_se)
     dev_full, devnull = _heldout_deviance(X, Y, alpha_star, l1_ratio, folds, family, kw)
     d2_full = 1.0 - dev_full / np.clip(devnull, 1e-10, None)
 

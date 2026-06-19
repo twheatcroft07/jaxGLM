@@ -285,7 +285,14 @@ def standardize(X, eps=1e-8):
 
 
 def unstandardize_weights(w_z, b_z, mean, std):
-    """Map weights fit on standardized X back to raw-X units."""
-    w = w_z / std
-    b = b_z - jnp.sum(w_z * mean / std)
+    """Map weights fit on standardized X back to raw-X units. Handles one unit (w_z shape (P,),
+    b_z scalar) OR many units at once (w_z (P,U), b_z (U,)) -- the per-unit case must broadcast
+    std/mean over the unit axis and reduce the intercept correction per unit, not to a scalar."""
+    w_z = jnp.asarray(w_z); mean = jnp.asarray(mean); std = jnp.asarray(std)
+    if w_z.ndim == 1:
+        w = w_z / std
+        b = b_z - jnp.sum(w_z * mean / std)
+    else:                                                   # (P, U): broadcast over units
+        w = w_z / std[:, None]
+        b = b_z - jnp.sum(w_z * (mean / std)[:, None], axis=0)
     return w, b
