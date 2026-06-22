@@ -67,6 +67,25 @@ def run(family):
     report(f"{family}/permutation", p["pvalue"], is_null)
 
 
+import pytest
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("family", ["gaussian", "poisson"])
+def test_wilcoxon_calibrated_under_autocorrelation(family):
+    """The recommended test (Wilcoxon) must keep its false-positive rate near nominal even on
+    rho=0.95 autocorrelated nulls -- otherwise per-unit significance on real spike trains is not
+    trustworthy. (The permutation null is allowed to inflate here; that's the documented reason to
+    prefer Wilcoxon for Poisson.) Slow-marked: run with `pytest -m slow`."""
+    X, Y, is_null = make_data(family)
+    Xz, *_ = pg.standardize(jnp.asarray(X))
+    Yj = jnp.asarray(Y)
+    w = enc.wilcoxon_full_vs_null(Xz, Yj, ALPHAS, l1_ratio=0.5, n_folds=5, family=family,
+                                  max_iter=MAX_ITER)
+    fpr = float(np.mean(np.asarray(w["pvalue"])[is_null] < 0.05))
+    assert fpr <= 0.15, f"{family}: Wilcoxon FPR {fpr:.3f} inflated under autocorrelation (~0.05)"
+
+
 if __name__ == "__main__":
     print("=== AUTOCORRELATED-NULL calibration (rho=0.95) ===")
     run("gaussian")
