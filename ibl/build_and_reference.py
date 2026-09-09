@@ -15,7 +15,8 @@ from sklearn.linear_model import PoissonRegressor
 
 import design as dz                                        # shift-kernel construction
 
-DIR = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/ibl_level_a"
+NS = os.environ.get("JAXGLM_DATA", "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft")
+DIR = os.path.join(NS, "ibl_level_a")
 d = np.load(os.path.join(DIR, "session_raw.npz"), allow_pickle=True)
 
 st = np.asarray(d["spike_times"]); sc = np.asarray(d["spike_clusters"]).astype(int)

@@ -9,13 +9,14 @@ import numpy as np
 
 PID = "56f2a378-78d2-4132-b3c8-8c1ba82be598"
 EID = "6713a4a7-faed-4df2-acab-ee4e63326f8d"
-OUT = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/ibl_level_a"
+NS = os.environ.get("JAXGLM_DATA", "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft")
+OUT = os.path.join(NS, "ibl_level_a")
 os.makedirs(OUT, exist_ok=True)
 
 from one.api import ONE
 one = ONE(base_url="https://openalyx.internationalbrainlab.org", silent=True,
           cache_dir=os.environ.get("ONE_CACHE",
-                                   "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/ibl_cache"))
+                                   os.path.join(NS, "ibl_cache")))
 
 # ----------------------------------------------------------------- introspect the encoding API
 def show(title, obj, hide_private=True):

@@ -22,7 +22,8 @@ from sklearn.linear_model import ElasticNet
 
 import design as dz                                        # shift-kernel construction
 
-DIR = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/chantranupong"
+NS = os.environ.get("JAXGLM_DATA", "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft")
+DIR = os.path.join(NS, "chantranupong")
 NWB = os.path.join(DIR, "WT63_20211112.nwb")
 SHIFTS = range(-20, 21)                                   # +/-20 bins @ 18.5 Hz ~ +/-1.1 s
 PRED = ["cpn", "cpx", "spnr", "spnnr", "spxr", "spxnr", "sl"]

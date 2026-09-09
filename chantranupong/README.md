@@ -19,7 +19,9 @@ predictors verified against the paper's `sglm` (`lynne_pp.py`): `cpn`/`cpx` (cen
 `X` is (21628 × 287), `Y` is (21628 × 2).
 
 ## Run
-Env `nwb` (dandi + pynwb + sklearn) for data/reference, `jaxGLM` for the fit.
+Env `nwb` (dandi + pynwb + sklearn) for data/reference, `jaxGLM` for the fit. Artifacts are read
+from `$JAXGLM_DATA/chantranupong` — set `JAXGLM_DATA` to run off a copy (see the main README
+"Data location"); it defaults to the author's netscratch root.
 ```
 python chantranupong/build_and_reference.py   # [nwb env]  NWB -> X/Y + sklearn ElasticNet reference
 python chantranupong/compare_jaxglm.py        # [jaxGLM]   jaxGLM gaussian fit, compare, kernel plot

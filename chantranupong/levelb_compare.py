@@ -20,7 +20,8 @@ import jax.numpy as jnp
 import poisson_glm as pg
 import viz
 
-DIR = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/chantranupong"
+NS = os.environ.get("JAXGLM_DATA", "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft")
+DIR = os.path.join(NS, "chantranupong")
 d = np.load(os.path.join(DIR, "levelb_compare.npz"), allow_pickle=True)
 X = jnp.asarray(d["X"]); y = jnp.asarray(d["y"][:, None])
 coef_ref = d["coef_ref"]; intercept_ref = float(d["intercept_ref"])

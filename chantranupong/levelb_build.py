@@ -14,7 +14,8 @@ from sklearn.linear_model import ElasticNet   # mean-normalized objective == jax
 import design as dz
 
 REPO = "/n/home02/twheatcroft/code/sabatinilab-glm/sglm/outputs_clean/Figure_6/g1/-20_+20"
-OUT = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/chantranupong/levelb_compare.npz"
+NS = os.environ.get("JAXGLM_DATA", "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft")
+OUT = os.path.join(NS, "chantranupong", "levelb_compare.npz")
 XCOLS = ["photometryCenterInIndex", "photometrySideInIndex", "photometrySideInIndexr",
          "photometrySideOutIndex", "sl", "spnnrOff"]               # their base_simple spec
 YCOL = "gGLUr"

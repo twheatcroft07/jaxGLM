@@ -15,7 +15,9 @@ from sklearn.linear_model import ElasticNet
 
 import design as dz
 
-G = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/kim/example datasets to run code/glm/forglm_trainingSet_wreach"
+NS = os.environ.get("JAXGLM_DATA", "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft")
+G = os.path.join(NS, "kim", "example datasets to run code", "glm",
+                 "forglm_trainingSet_wreach")
 EVENTS = ["cue", "opto", "distract", "success", "drop", "miss", "cXsuc", "cXdro", "cXmis", "reach"]
 SHIFTS = range(-20, 51)                         # [-20, 50] inclusive, 71 lags (matches feature_names)
 ALPHA, L1 = 0.01, 0.1                            # the lab's saved hyperparameters
@@ -57,7 +59,7 @@ for u in range(U):
 print(f"sklearn ElasticNet: median holdout R^2 = {np.median(r2_ho):.3f} | "
       f"published median = {np.median(pub):.3f}")
 
-out = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/kim/kim_compare.npz"
+out = os.path.join(NS, "kim", "kim_compare.npz")
 np.savez(out, X=X, Y=Y, W_ref=W_ref, r2_tr_ref=r2_tr, r2_ho_ref=r2_ho, pub_holdout=pub,
          alpha=ALPHA, l1_ratio=L1, te=te, names=np.array(names))
 print(f"saved -> {out}")

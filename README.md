@@ -272,6 +272,21 @@ in **bins**; counts are dimensionless. Seconds enter only at binning; bins are u
     `sglm`/`k-glm`) at the lab's own hyperparameters: jaxGLM reproduces the **published per-neuron
     holdout R²** (correlation **0.915**), median matches ([`kim/`](kim)).
 
+### Data location
+
+The reproduction artifacts (the NWB/npz inputs and saved comparisons) live **outside the repo** —
+they are too large to version, and some are pulled from public archives. Every script and test that
+reads them resolves its path from a single root:
+
+```bash
+export JAXGLM_DATA=/path/to/your/copy    # defaults to the author's cluster netscratch root
+```
+
+Under that root the layout is `chantranupong/`, `kim/`, `ibl_level_a/` (plus `ibl_cache/` for the
+ONE-api cache and `jaxglm_viz/` for figure output). With `JAXGLM_DATA` unset and the default root
+absent, [`test_reproductions.py`](test_reproductions.py) **skips** rather than fails, and the
+figure-writing tests fall back to a temp dir — so the suite runs anywhere.
+
 ## Roadmap
 
 - [x] Core FISTA elastic-net solver (Poisson + Gaussian), vmapped over units / λ-grid

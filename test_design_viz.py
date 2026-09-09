@@ -15,7 +15,7 @@ import viz
 import poisson_glm as pg
 
 # write figures to netscratch on the cluster, else a temp dir (so this runs in CI without netscratch)
-_NS = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/jaxglm_viz"
+_NS = os.path.join(os.environ.get("JAXGLM_DATA", "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft"), "jaxglm_viz")
 OUT = _NS if os.path.isdir(os.path.dirname(_NS)) else os.path.join(tempfile.gettempdir(), "jaxglm_viz")
 os.makedirs(OUT, exist_ok=True)
 

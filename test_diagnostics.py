@@ -8,6 +8,7 @@ Then renders the 'right scale' path figure to a PNG (netscratch).
 Run on a GPU node: conda activate jaxGLM && python test_diagnostics.py
 """
 import os
+import tempfile
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -18,7 +19,9 @@ import poisson_glm as pg
 import encoding as enc
 import viz
 
-OUT = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/jaxglm_viz"
+# write figures under JAXGLM_DATA on the cluster, else a temp dir (so this runs anywhere)
+_NS = os.path.join(os.environ.get("JAXGLM_DATA", "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft"), "jaxglm_viz")
+OUT = _NS if os.path.isdir(os.path.dirname(_NS)) else os.path.join(tempfile.gettempdir(), "jaxglm_viz")
 os.makedirs(OUT, exist_ok=True)
 
 

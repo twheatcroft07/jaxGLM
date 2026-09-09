@@ -13,7 +13,8 @@ import jax.numpy as jnp
 
 import poisson_glm as pg
 
-DIR = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/ibl_level_a"
+NS = os.environ.get("JAXGLM_DATA", "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft")
+DIR = os.path.join(NS, "ibl_level_a")
 d = np.load(os.path.join(DIR, "level_a_compare.npz"))
 Xz = jnp.asarray(d["Xz"]); Y = jnp.asarray(d["Y"])
 W_ref = d["W_ref"]; d2_ref = d["d2_ref"]; alpha = float(d["alpha"])

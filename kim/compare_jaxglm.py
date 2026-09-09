@@ -9,7 +9,8 @@ import jax.numpy as jnp
 import poisson_glm as pg
 import viz
 
-DIR = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft/kim"
+NS = os.environ.get("JAXGLM_DATA", "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft")
+DIR = os.path.join(NS, "kim")
 d = np.load(os.path.join(DIR, "kim_compare.npz"), allow_pickle=True)
 Xz = jnp.asarray(d["X"]); Y = jnp.asarray(d["Y"])    # raw X (no standardization -- matches sglm)
 W_ref = d["W_ref"]; r2_ho_ref = d["r2_ho_ref"]; pub = d["pub_holdout"]

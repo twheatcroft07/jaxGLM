@@ -4,13 +4,16 @@ once" into "we still match it." They require the cluster data (on netscratch), s
 gracefully when those artifacts aren't present (e.g. in CI). Cluster workflow: re-run the relevant
 `<repro>/compare_jaxglm.py` to regenerate the npz, then `pytest test_reproductions.py`.
 
+Set `JAXGLM_DATA` to point at a copy of the artifacts held somewhere other than the default
+netscratch root (see README "Data location").
+
 The golden numbers + tolerances below are the known-good state (see each repro's README).
 """
 import os
 import numpy as np
 import pytest
 
-NS = "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft"
+NS = os.environ.get("JAXGLM_DATA", "/n/netscratch/kempner_bsabatini_lab/Lab/twheatcroft")
 
 
 def _load(relpath):
